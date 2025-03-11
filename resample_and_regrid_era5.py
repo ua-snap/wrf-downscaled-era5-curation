@@ -15,7 +15,7 @@ import rioxarray
 from dask.distributed import LocalCluster, Client
 from pyproj import CRS, Transformer, Proj
 
-from config import ERA5_DATA_VARS
+from config import config
 from era5_variables import era5_datavar_lut
 
 
@@ -58,7 +58,7 @@ def parse_args():
         "--no_clobber",
         action="store_true",
         default=False,
-        help="Do not overwrite existing files in rasda_dir.",
+        help="Do not overwrite existing files in the output directory.",
     )
 
     args = parser.parse_args()
@@ -74,38 +74,79 @@ def parse_args():
 
 
 def get_year_filepaths(era5_dir, year, fn_str):
-    """Get all of the filepaths for a single year of ERA5 data."""
+    """Get all of the filepaths for a single year of ERA5 data.
+
+    Args:
+        era5_dir (Path): The directory containing the source input ERA5 data.
+        year (int): The year to process.
+        fn_str (str): The filename string for the input data.
+    Returns:
+        list[Path]: The list of filepaths for the year of data.
+    """
     fps = sorted(era5_dir.joinpath(f"{year}").glob(fn_str.format(date="*")))
     return fps
 
 
 def get_drop_vars(fp):
-    """Get the variables to exclude from the open_mfdataset() call using a single sample file."""
+    """Get the variables to exclude from the open_mfdataset() call using a single sample file.
 
+    This is going to speed up the open_mfdataset() call by excluding variables we don't need.
+    We are just generating a list here and can assume homogenity acaross the input data, so we only query a single file.
+
+    Args:
+        fp (Path): The filepath to a single ERA5 input data file.
+    Returns:
+        list[str]: The list of variables to exclude from the open_mfdataset() call.
+    """
+    var_ids_to_keep = [era5_datavar_lut[x]["var_id"] for x in config.DATA_VARS]
     ds = xr.open_dataset(fp)
     drop_vars = [
         x
         for x in list(ds.variables)
         # these are the variables we want to keep
         if x
-        not in ERA5_DATA_VARS + ["Time", "south_north", "west_east", "XLONG", "XLAT"]
+        not in var_ids_to_keep + ["Time", "south_north", "west_east", "XLONG", "XLAT"]
     ]
     ds.close()
-
     return drop_vars
 
 
 def open_dataset(fps, drop_vars):
-    """Open a batch of hourly files and return the dataset"""
+    """Open a batch of hourly files and return the dataset.
+
+    Opening files with `parallel=True` uses dask.delayed.
+
+    Args:
+        fps (list[Path]): The list of filepaths to open.
+        drop_vars (list[str]): The variables to exclude from the dataset.
+    Returns:
+        xr.Dataset: The opened dataset."""
     era5_ds = xr.open_mfdataset(
         fps, drop_variables=drop_vars, engine="h5netcdf", parallel=True
     )
-
     return era5_ds
 
 
+def get_agg_var_lut(agg_var):
+    """Fetch the aggregation function for a data variable.
+
+    Args:
+        agg_var (str): The variable to aggregate.
+    Returns:
+        dict: The variable ID and aggregation function.
+    """
+    return era5_datavar_lut[agg_var]
+
+
 def resample(era5_ds, agg_var):
-    """Resample an hourly dataset to daily resolution using method provided"""
+    """Resample an hourly frequency dataset to daily frequency.
+
+    Args:
+        era5_ds (xr.Dataset): The input dataset with a calendar year's worth of hourly data.
+        agg_var (str): The variable to aggregate.
+    Returns:
+        xr.Dataset: The resampled dataset with a calendar year's worth of daily data.
+    """
     agg_var_lut = get_agg_var_lut(agg_var)
     var_id, agg_func = agg_var_lut["var_id"], agg_var_lut["agg_func"]
 
@@ -124,20 +165,16 @@ def resample(era5_ds, agg_var):
     return agg_ds
 
 
-def get_agg_var_lut(agg_var):
-    """Fetch the aggregation function for a data variable.
+def agg_files_exist(year, agg_vars, output_dir):
+    """Check if the aggregated files already exist.
 
     Args:
-        agg_var (str): The variable to aggregate.
+        year (int): The year to process.
+        agg_vars (list[str]): The variables to aggregate.
+        output_dir (Path): The directory to check for the saved aggregated data.
     Returns:
-        dict: The variable ID and aggregation function.
+        bool: True if all of the files already exist, False otherwise.
     """
-
-    return era5_datavar_lut[agg_var]
-
-
-def agg_files_exist(year, agg_vars, output_dir, fn_str):
-    """Check if the aggregated files already exist"""
     file_exist_accum = []
     for agg_var in agg_vars:
         # fps should be groupd by year so we only need one
@@ -149,9 +186,17 @@ def agg_files_exist(year, agg_vars, output_dir, fn_str):
     return all_files_exist
 
 
-def check_no_clobber(no_clobber, year, agg_vars, output_dir, fn_str):
-    """Check if the no_clobber flag is set and if the files already exist"""
-    if no_clobber and agg_files_exist(year, agg_vars, output_dir, fn_str):
+def check_no_clobber(no_clobber, year, agg_vars, output_dir):
+    """Check if the no_clobber flag is set and if the files already exist.
+
+    Args:
+        no_clobber (bool): The no_clobber flag.
+        year (int): The year to process.
+        agg_vars (list[str]): The variables to aggregate.
+        output_dir (Path): The directory to check for the saved aggregated data.
+    Returns:
+        bool: True if the files already exist and no_clobber is set, False otherwise."""
+    if no_clobber and agg_files_exist(year, agg_vars, output_dir):
         logging.info(f"Resampled files for {year} already exist, skipping")
         return True
     else:
@@ -160,12 +205,29 @@ def check_no_clobber(no_clobber, year, agg_vars, output_dir, fn_str):
 
 
 def get_output_filepath(output_dir, agg_var, year):
-    """Get the output filepath for the resampled data"""
+    """Get the output filepath for the resampled data.
+
+    Args:
+        output_dir (Path): The output directory.
+        agg_var (str): The variable to aggregate.
+        year (int): The year to process.
+    Returns:
+        Path: The output filepath.
+    """
     return output_dir.joinpath(agg_var, OUT_FN_STR.format(year=year, var_id=agg_var))
 
 
 def write_data(agg_da, output_dir, agg_var, year):
-    """Write the resampled data to disk"""
+    """Write the resampled data to disk.
+
+    Args:
+        agg_da (xr.Dataset): The resampled dataset.
+        output_dir (Path): The output directory.
+        agg_var (str): The variable to aggregate.
+        year (int): The year to process.
+    Returns:
+        Path: The output filepath.
+    """
     out_fp = get_output_filepath(output_dir, agg_var, year)
     agg_da.to_netcdf(out_fp)
 
@@ -209,7 +271,7 @@ def process_era5(
 ):
     """Resample year of data"""
 
-    if not check_no_clobber(no_clobber, year, agg_vars, output_dir, fn_str):
+    if not check_no_clobber(no_clobber, year, agg_vars, output_dir):
         fps = get_year_filepaths(era5_dir, year, fn_str)
         open_resample_regrid(
             fps,
@@ -222,18 +284,24 @@ def process_era5(
 
 
 def get_grid_info(tmp_file, geo_file):
+    """Get the grid information for the WRF projection.
+
+    The proj4 string for the WRF projection is:
+    +proj=stere +units=m +a=6370000.0 +b=6370000.0 +lat_0=90.0 +lon_0=-152 +lat_ts=64 +nadgrids=@null
+    The proj4 string was determined independently of this code using the WRF-Python package, but this package has
+    spotty availability and compatability, but for reference here is the snippet to obtain the proj4 string
+
+    `wrf_proj = PolarStereographic(**{"TRUELAT1": geo_ds.attrs["TRUELAT1"], "STAND_LON": geo_ds.attrs["STAND_LON"]}).proj4()`
+
+    Args:
+        tmp_file (Path): A single ERA5 data file.
+        geo_file (Path): The WRF geo_em file.
+    Returns:
+        dict: The grid information for the WRF projection.
+    """
     ds = xr.open_dataset(tmp_file)
     geo_ds = xr.open_dataset(geo_file)
 
-    # The proj4 string for the WRF projection is:
-    # +proj=stere +units=m +a=6370000.0 +b=6370000.0 +lat_0=90.0 +lon_0=-152 +lat_ts=64 +nadgrids=@null
-    # this was determined separately using the WRF-Python package
-    # which has spotty availability / compatability
-    #
-    # here is the code for how that was done:
-    # wrf_proj = PolarStereographic(
-    #     **{"TRUELAT1": geo_ds.attrs["TRUELAT1"], "STAND_LON": geo_ds.attrs["STAND_LON"]}
-    # ).proj4()
     wrf_proj = "+proj=stere +units=m +a=6370000.0 +b=6370000.0 +lat_0=90.0 +lon_0=-152 +lat_ts=64 +nadgrids=@null"
 
     # WGS84 projection
@@ -260,7 +328,15 @@ def get_grid_info(tmp_file, geo_file):
 
 
 def regrid(ds, var_id, grid_kwargs):
-    """Regrid ERA5 data to EPSG:3338"""
+    """Regrid ERA5 data to EPSG:3338.
+
+    Args:
+        ds (xr.Dataset): The input dataset.
+        var_id (str): The variable to regrid.
+        grid_kwargs (dict): The grid information for the WRF projection.
+    Returns:
+        xr.Dataset: The regridded dataset.
+    """
     x, y, wrf_crs = [grid_kwargs[k] for k in ["x", "y", "wrf_crs"]]
 
     ds_proj = (
@@ -272,7 +348,7 @@ def regrid(ds, var_id, grid_kwargs):
     )
 
     ds_3338 = ds_proj.rio.reproject("EPSG:3338")
-    # make sure units is not lost here
+    # make sure units attribute is not lost here
     ds_3338[var_id].attrs["units"] = ds[var_id].attrs["units"]
 
     return ds_3338
@@ -280,7 +356,7 @@ def regrid(ds, var_id, grid_kwargs):
 
 def main(era5_dir, output_dir, geo_file, year, fn_str, no_clobber):
     # want these variables at daily resolution
-    agg_vars = ERA5_DATA_VARS
+    agg_vars = config.DATA_VARS
     # make output dirs for these
     for var in agg_vars:
         output_dir.joinpath(var).mkdir(exist_ok=True)
