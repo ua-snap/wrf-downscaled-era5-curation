@@ -46,7 +46,16 @@ class Config:
     )
 
     # Overwrite existing files or not
-    OVERWRITE: bool = bool(getenv("ERA5_OVERWRITE", "False"))
+    # hacky way to handle boolean env vars because they always get passed as strings
+    # python can't interpolate variables using POSIX variable expansion
+    # should look into using a library like python-dotenv
+    OVERWRITE: bool = getenv("ERA5_OVERWRITE", "False").lower() in (
+        "true",
+        "1",
+        "t",
+        "yes",
+        "y",
+    )
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
@@ -93,3 +102,6 @@ config = Config()
 
 # Export the config instance as the primary interface
 __all__ = ["config"]
+
+# Emit the config to STDOUT for debugging
+print(config)
