@@ -1,11 +1,12 @@
-"""Resample (aggregate) and reproject the WRF ERA5 from hourly to daily data in EPSG:3338.
-This is done for maximum, mean, and minimum temperature, and total precipitation.
+"""This script is the primary worker script for resampling (i.e. aggregating) and reprojecting the downscaled WRF ERA5 data from hourly to daily in EPSG:3338.
+The ERA5 data variables processed, their aggregation function (usually min, mean, or max) are prescribed in the dict.
 
 Example usage:
     python resample_and_regrid_era5.py --era5_dir /beegfs/CMIP6/wrf_era5/04km --output_dir /beegfs/CMIP6/kmredilla/daily_era5_4km_3338 --year 1965 --geo_file /beegfs/CMIP6/wrf_era5/geo_em.d02.nc
 """
 
 import argparse
+
 import logging
 from pathlib import Path
 import numpy as np
@@ -13,6 +14,9 @@ import xarray as xr
 import rioxarray
 from dask.distributed import LocalCluster, Client
 from pyproj import CRS, Transformer, Proj
+
+from config import ERA5_DATA_VARS
+from era5_variables import era5_datavar_lut
 
 
 OUT_FN_STR = "{var_id}_{year}_era5_4km_3338.nc"
@@ -84,7 +88,7 @@ def get_drop_vars(fp):
         for x in list(ds.variables)
         # these are the variables we want to keep
         if x
-        not in ["T2", "rainnc", "Time", "south_north", "west_east", "XLONG", "XLAT"]
+        not in ERA5_DATA_VARS + ["Time", "south_north", "west_east", "XLONG", "XLAT"]
     ]
     ds.close()
 
@@ -121,15 +125,15 @@ def resample(era5_ds, agg_var):
 
 
 def get_agg_var_lut(agg_var):
-    """Look up table for the aggregation function for each variable"""
-    lut = {
-        "t2min": {"var_id": "T2", "agg_func": lambda x: x.min(dim="Time")},
-        "t2": {"var_id": "T2", "agg_func": lambda x: x.mean(dim="Time")},
-        "t2max": {"var_id": "T2", "agg_func": lambda x: x.max(dim="Time")},
-        "pr": {"var_id": "rainnc", "agg_func": lambda x: x.sum(dim="Time")},
-    }
+    """Fetch the aggregation function for a data variable.
 
-    return lut[agg_var]
+    Args:
+        agg_var (str): The variable to aggregate.
+    Returns:
+        dict: The variable ID and aggregation function.
+    """
+
+    return era5_datavar_lut[agg_var]
 
 
 def agg_files_exist(year, agg_vars, output_dir, fn_str):
@@ -276,7 +280,7 @@ def regrid(ds, var_id, grid_kwargs):
 
 def main(era5_dir, output_dir, geo_file, year, fn_str, no_clobber):
     # want these variables at daily resolution
-    agg_vars = ["t2min", "t2", "t2max", "pr"]
+    agg_vars = ERA5_DATA_VARS
     # make output dirs for these
     for var in agg_vars:
         output_dir.joinpath(var).mkdir(exist_ok=True)
