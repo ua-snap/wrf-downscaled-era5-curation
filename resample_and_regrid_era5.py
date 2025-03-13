@@ -6,9 +6,9 @@ Example usage:
 """
 
 import argparse
-
 import logging
 from pathlib import Path
+
 import numpy as np
 import xarray as xr
 import rioxarray
@@ -242,7 +242,17 @@ def open_resample_regrid(
     year,
     grid_kwargs,
 ):
-    """Open the dataset and aggregate the data for each variable"""
+    """Open the dataset and aggregate the data for each variable.
+    Args:
+        fps (list[Path]): The list of filepaths to open.
+        drop_vars (list[str]): The variables to exclude from the dataset.
+        agg_vars (list[str]): The variables to aggregate.
+        output_dir (Path): The output directory.
+        year (int): The year to process.
+        grid_kwargs (dict): The grid information for the WRF projection.
+    Returns:
+        None
+    """
     with Client(n_workers=4, threads_per_worker=6) as client:
         era5_ds = open_dataset(fps, drop_vars)
         era5_ds.load()
