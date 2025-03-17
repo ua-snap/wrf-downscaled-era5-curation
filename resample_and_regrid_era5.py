@@ -18,6 +18,8 @@ from pyproj import CRS, Transformer, Proj
 from config import config
 from era5_variables import era5_datavar_lut
 
+era5_datavar_lut = era5_datavar_lut[config.DATA_VAR_CATEGORY]
+
 
 OUT_FN_STR = "{var_id}_{year}_era5_4km_3338.nc"
 
@@ -159,8 +161,8 @@ def resample(era5_ds, agg_var):
     )
     agg_ds[agg_var].attrs["units"] = era5_ds[var_id].attrs["units"]
 
-    era5_ds.close()
-    del era5_ds
+    # era5_ds.close()
+    # del era5_ds
 
     return agg_ds
 
@@ -200,7 +202,7 @@ def check_no_clobber(no_clobber, year, agg_vars, output_dir):
         logging.info(f"Resampled files for {year} already exist, skipping")
         return True
     else:
-        logging.info(f"Missing some resampled files for {year}, processing")
+        logging.info(f"No previously processed data for {year} was located, processing")
         return False
 
 
@@ -253,20 +255,32 @@ def open_resample_regrid(
     Returns:
         None
     """
-    with Client(n_workers=4, threads_per_worker=6) as client:
+    client = Client(n_workers=4, threads_per_worker=4)
+    try:
+        logging.info(f"Opening dataset for year {year} with {len(fps)} files.")
         era5_ds = open_dataset(fps, drop_vars)
         era5_ds.load()
-    logging.info("Dataset opened and read into memory.")
+        logging.info("Dataset opened and read into memory.")
 
-    for agg_var in agg_vars:
-        agg_ds = resample(era5_ds, agg_var)
-        logging.info(f"Dataset for {agg_var} resampled.")
-        regrid_ds = regrid(agg_ds, agg_var, grid_kwargs)
-        logging.info(f"Dataset regridded {agg_var} writing.")
-        out_fp = write_data(regrid_ds, output_dir, agg_var, year)
-        logging.info(year, agg_var, f"done, written to {out_fp}")
+        for agg_var in agg_vars:
+            try:
+                logging.info(f"Resampling {agg_var} for year {year}.")
+                agg_ds = resample(era5_ds, agg_var)
+                logging.info(f"Regridding {agg_var} for year {year}.")
+                regrid_ds = regrid(agg_ds, agg_var, grid_kwargs)
+                logging.info(f"Writing {agg_var} for year {year}.")
+                out_fp = write_data(regrid_ds, output_dir, agg_var, year)
+                logging.info(f"{year}, {agg_var}, done, written to {out_fp}")
+            except Exception as e:
+                logging.error(f"Error processing {agg_var} for year {year}: {e}")
+                continue
 
-    del era5_ds
+    except Exception as e:
+        logging.error(f"Error processing year {year}: {e}")
+    finally:
+        client.close()
+        era5_ds.close()
+        del era5_ds
 
 
 def process_era5(
@@ -388,5 +402,14 @@ def main(era5_dir, output_dir, geo_file, year, fn_str, no_clobber):
 
 
 if __name__ == "__main__":
+
     era5_dir, output_dir, geo_file, year, fn_str, no_clobber = parse_args()
+
+    logging.basicConfig(
+        filename=Path.home().joinpath(f"resample_and_regrid_era5_{year}.log"),
+        level=logging.INFO,
+        format="%(asctime)s - %(levelname)s - %(message)s",
+    )
+
     main(era5_dir, output_dir, geo_file, year, fn_str, no_clobber)
+    logging.info(f"Processing for {year} complete.")

@@ -17,7 +17,6 @@ export ERA5_OUTPUT_DIR="./dev_output"
 # Enable overwriting of existing data for development
 export ERA5_OVERWRITE=True
 
-
 echo "Development environment variables set:"
 echo "  Processing variable: $ERA5_DATA_VARS"
 echo "  Year range: $ERA5_START_YEAR-$ERA5_END_YEAR"

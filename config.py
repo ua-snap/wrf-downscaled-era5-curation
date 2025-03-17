@@ -32,6 +32,8 @@ class Config:
 
     DATA_VARS: list[str] = field(default_factory=lambda: _get_data_vars())
 
+    DATA_VAR_CATEGORY: list[str] = getenv("ERA5_DATA_VAR_CATEGORY", "radiative_balance")
+
     # File patterns and naming
     INPUT_FILE_PATTERN: str = getenv(
         "ERA5_INPUT_PATTERN", "era5_wrf_dscale_4km_{date}.nc"
@@ -94,7 +96,9 @@ def _get_data_vars() -> list[str]:
     env_vars = getenv("ERA5_DATA_VARS", "")
     if env_vars:
         return [x.strip() for x in env_vars.split(",") if x.strip()]
-    return list(era5_datavar_lut.keys())
+    else:
+        category_lut = era5_datavar_lut["radiative_balance"]
+        return list(category_lut.keys())
 
 
 # Create a global instance of the configuration

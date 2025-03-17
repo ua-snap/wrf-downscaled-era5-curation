@@ -2,9 +2,9 @@
 
 
 example usage:
-    python /beegfs/CMIP6/$USER/repos/cmip6-utils/downscaling/run_resample_and_regrid_era5.py
-        --conda_env_name snap-geo
-        --output_directory /beegfs/CMIP6/$USER/daily_era5_4km_3338/netcdf
+    python /beegfs/CMIP6/$USER/repos/wrf-downscaled-era5-curation/run_resample_and_regrid_era5.py \
+        --conda_env_name snap-geo \
+        --output_directory /beegfs/CMIP6/$USER/daily_era5_4km_3338/netcdf \
         --slurm_directory /beegfs/CMIP6/$USER/daily_era5_4km_3338/netcdf
 """
 
@@ -135,8 +135,8 @@ if __name__ == "__main__":
     process_era5_sbatch_file = slurm_directory.joinpath(
         "resample_and_regrid_era5.slurm"
     )
-    process_era5_sbatch_out_file = str(process_era5_sbatch_file).replace(
-        ".slurm", "_%j.out"
+    process_era5_sbatch_out_file = Path.home().joinpath(
+        str(process_era5_sbatch_file).replace(".slurm", "_%j.out")
     )
     config_file = slurm_directory.joinpath("slurm_array_config.txt")
 
@@ -147,15 +147,13 @@ if __name__ == "__main__":
 
     sbatch_text = (
         "#!/bin/sh\n"
-        f"#SBATCH --array={array_range}%10\n"  # don't run more than 10 tasks
+        f"#SBATCH --array={array_range}%5\n"  # don't run more than 5 tasks
         f"#SBATCH --job-name=era5_{start_year}_{end_year}\n"
         "#SBATCH --nodes=1\n"
-        # f"#SBATCH --cpus-per-task=24\n"
         f"#SBATCH -p t2small\n"
-        f"#SBATCH --time=08:00:00\n"
+        f"#SBATCH --time=23:59:59\n"
         f"#SBATCH --output {process_era5_sbatch_out_file}\n"
         "echo Start slurm && date\n"
-        # this should work to initialize conda without a conda init script
         'eval "$($HOME/miniconda3/bin/conda shell.bash hook)"\n'
         f"conda activate {conda_env_name}\n"
         f"config={config_file}\n"
@@ -164,8 +162,7 @@ if __name__ == "__main__":
         f"python resample_and_regrid_era5.py --era5_dir {wrf_era5_directory} "
         f"--output_dir {output_directory} --year $year --geo_file {config.GEO_EM_FILE} "
     )
-    print(config.OVERWRITE)
-    print(type(config.OVERWRITE))
+
     if not config.OVERWRITE:
         sbatch_text += "--no_clobber"
 
