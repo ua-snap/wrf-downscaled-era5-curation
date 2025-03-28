@@ -95,8 +95,8 @@ def parse_args() -> argparse.Namespace:
         "--optimization_mode",
         type=str,
         choices=["balanced", "io_optimized", "compute_optimized", "fully_optimized"],
-        default="io_optimized",
-        help="Optimization mode for worker configuration (default: io_optimized)"
+        default=config.OPTIMIZATION_MODE,
+        help=f"Optimization mode for worker configuration (default: {config.OPTIMIZATION_MODE})"
     )
     parser.add_argument(
         "--use_job_arrays",
@@ -166,7 +166,7 @@ def submit_individual_jobs(
     max_concurrent: int,
     no_submit: bool,
     wait_time: int,
-    optimization_mode: str = "io_optimized"
+    optimization_mode: str = config.OPTIMIZATION_MODE
 ) -> Dict[str, List[str]]:
     """Submit individual jobs for each variable and year.
     
@@ -249,7 +249,7 @@ def generate_job_array(
     start_year: int,
     end_year: int,
     output_dir: Path,
-    optimization_mode: str = "io_optimized"
+    optimization_mode: str = config.OPTIMIZATION_MODE
 ) -> Tuple[Path, str]:
     """Generate a job array script for a variable.
     
@@ -278,66 +278,65 @@ def generate_job_array(
     # Get array size
     array_size = end_year - start_year + 1
     
-    # Create the script content
-    script_content = f"""#!/bin/bash
-#SBATCH --job-name=era5_{variable}
-#SBATCH --nodes=1
-#SBATCH --ntasks=1
-#SBATCH --cpus-per-task=24
-#SBATCH --mem=96G
-#SBATCH --time=2:00:00
-#SBATCH --partition=t2small
-#SBATCH --output=era5_{variable}_%A_%a.out
-#SBATCH --array=1-{array_size}%5
-
-# Get year from year map file
-YEAR_FILE={year_map_file}
-YEAR=$(awk -v idx=$SLURM_ARRAY_TASK_ID '{{if($1==idx) print $2}}' $YEAR_FILE)
-
-if [ -z "$YEAR" ]; then
-    echo "Error: Could not determine year for array task $SLURM_ARRAY_TASK_ID"
-    exit 1
-fi
-
-echo "Starting at $(date)"
-echo "Running on $(hostname)"
-echo "Processing variable {variable} for year $YEAR"
-
-# Activate conda environment
-source $HOME/miniconda3/etc/profile.d/conda.sh
-conda activate snap-geo
-
-# Install psutil if it's not already available
-if ! python -c "import psutil" &> /dev/null; then
-    echo "Installing psutil for memory monitoring"
-    pip install psutil
-fi
-
-# Set OpenMP threads
-export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
-
-# Run the Python script with optimized settings
-python process_single_variable.py \\
-    --year $YEAR \\
-    --variable {variable} \\
-    --cores $SLURM_CPUS_PER_TASK \\
-    --memory_limit "85GB" \\
-    --optimization_mode "{optimization_mode}" \\
-    --monitor_memory \\
-    --monitor_interval 60 \\
-    --recurse_limit 100
-
-# Check the exit status
-if [ $? -eq 0 ]; then
-    echo "Processing completed successfully"
-else
-    EXIT_CODE=$?
-    echo "Processing failed with exit code $EXIT_CODE"
-    exit $EXIT_CODE
-fi
-
-echo "Finished at $(date)"
-"""
+    # Create the script content using explicit string construction to ensure variables are properly interpolated
+    script_content = "#!/bin/bash\n"
+    script_content += f"#SBATCH --job-name=era5_{variable}\n"
+    script_content += "#SBATCH --nodes=1\n"
+    script_content += "#SBATCH --ntasks=1\n"
+    script_content += "#SBATCH --cpus-per-task=24\n"
+    script_content += "#SBATCH --mem=96G\n"
+    script_content += "#SBATCH --time=2:00:00\n"
+    script_content += "#SBATCH --partition=t2small\n"
+    script_content += f"#SBATCH --output=era5_{variable}_%A_%a.out\n"
+    script_content += f"#SBATCH --array=1-{array_size}%5\n\n"
+    
+    script_content += "# Get year from year map file\n"
+    script_content += f"YEAR_FILE={year_map_file}\n"
+    script_content += "YEAR=$(awk -v idx=$SLURM_ARRAY_TASK_ID '{if($1==idx) print $2}' $YEAR_FILE)\n\n"
+    
+    script_content += "if [ -z \"$YEAR\" ]; then\n"
+    script_content += "    echo \"Error: Could not determine year for array task $SLURM_ARRAY_TASK_ID\"\n"
+    script_content += "    exit 1\n"
+    script_content += "fi\n\n"
+    
+    script_content += "echo \"Starting at $(date)\"\n"
+    script_content += "echo \"Running on $(hostname)\"\n"
+    script_content += f"echo \"Processing variable {variable} for year $YEAR\"\n\n"
+    
+    script_content += "# Activate conda environment\n"
+    script_content += "source $HOME/miniconda3/etc/profile.d/conda.sh\n"
+    script_content += "conda activate snap-geo\n\n"
+    
+    script_content += "# Install psutil if it's not already available\n"
+    script_content += "if ! python -c \"import psutil\" &> /dev/null; then\n"
+    script_content += "    echo \"Installing psutil for memory monitoring\"\n"
+    script_content += "    pip install psutil\n"
+    script_content += "fi\n\n"
+    
+    script_content += "# Set OpenMP threads\n"
+    script_content += "export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK\n\n"
+    
+    script_content += "# Run the Python script with optimized settings\n"
+    script_content += "python process_single_variable.py \\\n"
+    script_content += "    --year $YEAR \\\n"
+    script_content += f"    --variable {variable} \\\n"
+    script_content += "    --cores $SLURM_CPUS_PER_TASK \\\n"
+    script_content += "    --memory_limit \"85GB\" \\\n"
+    script_content += f"    --optimization_mode \"{optimization_mode}\" \\\n"
+    script_content += "    --monitor_memory \\\n"
+    script_content += "    --monitor_interval 60 \\\n"
+    script_content += "    --recurse_limit 100\n\n"
+    
+    script_content += "# Check the exit status\n"
+    script_content += "if [ $? -eq 0 ]; then\n"
+    script_content += "    echo \"Processing completed successfully\"\n"
+    script_content += "else\n"
+    script_content += "    EXIT_CODE=$?\n"
+    script_content += "    echo \"Processing failed with exit code $EXIT_CODE\"\n"
+    script_content += "    exit $EXIT_CODE\n"
+    script_content += "fi\n\n"
+    
+    script_content += "echo \"Finished at $(date)\"\n"
     
     # Write the script to file
     script_path = scripts_dir.joinpath(f"process_{variable}_{start_year}_{end_year}.sbatch")
@@ -354,7 +353,7 @@ def submit_job_arrays(
     output_dir: Path,
     no_submit: bool,
     wait_time: int,
-    optimization_mode: str = "io_optimized"
+    optimization_mode: str = config.OPTIMIZATION_MODE
 ) -> Dict[str, str]:
     """Submit job arrays for each variable.
     
