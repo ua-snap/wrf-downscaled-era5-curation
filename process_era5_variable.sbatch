@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=96G
-#SBATCH --time=12:00:00
+#SBATCH --time=2:00:00
 #SBATCH --partition=t2small
 #SBATCH --output=era5_process_%j.out
 
@@ -28,10 +28,6 @@ fi
 
 # Set OpenMP threads
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
-
-# Set HDF5 cache settings to improve netCDF performance
-export HDF5_USE_FILE_LOCKING=FALSE
-export HDF5_CACHE_SIZE=1073741824  # 1GB cache
 
 # Get command line arguments
 YEAR=$1

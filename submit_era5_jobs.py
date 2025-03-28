@@ -16,7 +16,6 @@ Example usage:
     python submit_era5_jobs.py --all_variables --start_year 2000 --end_year 2000
 """
 
-# Standard library imports
 import argparse
 import logging
 import os
@@ -24,9 +23,8 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import List, Optional, Set, Tuple, Dict, Any
+from typing import List, Tuple, Dict
 
-# Local imports
 from era5_variables import era5_datavar_lut, list_all_variables
 from config import config
 
@@ -287,7 +285,7 @@ def generate_job_array(
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=96G
-#SBATCH --time=12:00:00
+#SBATCH --time=2:00:00
 #SBATCH --partition=t2small
 #SBATCH --output=era5_{variable}_%A_%a.out
 #SBATCH --array=1-{array_size}%5
@@ -317,10 +315,6 @@ fi
 
 # Set OpenMP threads
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
-
-# Set HDF5 cache settings to improve netCDF performance
-export HDF5_USE_FILE_LOCKING=FALSE
-export HDF5_CACHE_SIZE=1073741824  # 1GB cache
 
 # Run the Python script with optimized settings
 python process_single_variable.py \\
