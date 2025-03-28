@@ -6,7 +6,7 @@
 #SBATCH --mem=96G
 #SBATCH --time=2:00:00
 #SBATCH --partition=t2small
-#SBATCH --output=era5_process_%j.out
+#SBATCH --output=logs/era5_process/%x_%j.out
 
 # Usage:
 # sbatch process_era5_variable.sbatch <year> <variable> [optimization_mode] [overwrite]
@@ -41,6 +41,9 @@ if [ -z "$YEAR" ] || [ -z "$VARIABLE" ]; then
     echo "Usage: sbatch process_era5_variable.sbatch <year> <variable> [optimization_mode] [overwrite]"
     exit 1
 fi
+
+# Create log directory for this variable
+mkdir -p logs/era5_process/${VARIABLE}
 
 echo "Processing variable $VARIABLE for year $YEAR"
 echo "Using optimization mode: $OPTIMIZATION_MODE"

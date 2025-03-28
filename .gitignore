@@ -2,6 +2,7 @@ deprecated_code_backup/
 *.out
 .cursor*
 cursor*
+logs/
 
 # Byte-compiled / optimized / DLL files
 __pycache__/

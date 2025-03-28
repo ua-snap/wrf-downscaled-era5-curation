@@ -159,6 +159,25 @@ def get_variables_to_process(args: argparse.Namespace) -> List[str]:
     return variables
 
 
+def create_log_directory(variable: str) -> Path:
+    """Create a log directory for a variable.
+    
+    Creates a directory structure: logs/era5_process/{variable}
+    
+    Args:
+        variable: Variable name
+        
+    Returns:
+        Path to the log directory
+    """
+    # Create the log directory structure
+    log_dir = Path("logs/era5_process").joinpath(variable)
+    log_dir.mkdir(parents=True, exist_ok=True)
+    
+    logging.info(f"Created log directory: {log_dir}")
+    return log_dir
+
+
 def submit_individual_jobs(
     variables: List[str],
     start_year: int,
@@ -191,6 +210,10 @@ def submit_individual_jobs(
     # Process each variable and year
     for variable in variables:
         job_ids[variable] = []
+        
+        # Create log directory for this variable
+        log_dir = create_log_directory(variable)
+        
         for year in range(start_year, end_year + 1):
             # Submit the job
             if no_submit:
@@ -218,8 +241,9 @@ def submit_individual_jobs(
                         logging.warning("Failed to check current job count, proceeding with submission")
                         break
                 
-                # Submit the job
-                cmd = ["sbatch", "process_era5_variable.sbatch", str(year), variable, optimization_mode]
+                # Submit the job with log directory specified
+                log_file = log_dir.joinpath(f"era5_{variable}_{year}.out")
+                cmd = ["sbatch", "--output", str(log_file), "process_era5_variable.sbatch", str(year), variable, optimization_mode]
                 logging.info(f"Submitting: {' '.join(cmd)}")
                 
                 try:
@@ -267,6 +291,9 @@ def generate_job_array(
     scripts_dir = Path("job_scripts")
     scripts_dir.mkdir(exist_ok=True)
     
+    # Create log directory for this variable
+    log_dir = create_log_directory(variable)
+    
     # Create year mapping file for array jobs
     year_map_file = scripts_dir / f"{variable}_{start_year}_{end_year}_year_map.txt"
     
@@ -287,7 +314,7 @@ def generate_job_array(
     script_content += "#SBATCH --mem=96G\n"
     script_content += "#SBATCH --time=2:00:00\n"
     script_content += "#SBATCH --partition=t2small\n"
-    script_content += f"#SBATCH --output=era5_{variable}_%A_%a.out\n"
+    script_content += f"#SBATCH --output={log_dir}/era5_{variable}_%A_%a.out\n"
     script_content += f"#SBATCH --array=1-{array_size}%5\n\n"
     
     script_content += "# Get year from year map file\n"
@@ -324,7 +351,7 @@ def generate_job_array(
     script_content += "    --memory_limit \"85GB\" \\\n"
     script_content += f"    --optimization_mode \"{optimization_mode}\" \\\n"
     script_content += "    --monitor_memory \\\n"
-    script_content += "    --monitor_interval 60 \\\n"
+    script_content += "    --monitor_interval 30 \\\n"
     script_content += "    --recurse_limit 100\n\n"
     
     script_content += "# Check the exit status\n"
