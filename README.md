@@ -28,10 +28,24 @@ The main components of the pipeline are:
 To process a single variable for a single year manually:
 
 ```bash
+# Basic usage
+sbatch process_era5_variable.sbatch <year> <variable>
+
+# Example
 sbatch process_era5_variable.sbatch 1980 t2_mean
+
+# With optimization mode specified
+sbatch process_era5_variable.sbatch 1980 t2_mean io_optimized
+
+# Force overwrite of existing files, handy for testing
+sbatch process_era5_variable.sbatch 1980 t2_mean io_optimized overwrite
 ```
 
-This will submit a SLURM job that processes the `t2_mean` variable for the year 1980.
+The SLURM script accepts up to four parameters:
+1. `year`: Year to process (required)
+2. `variable`: Variable to process (required)
+3. `optimization_mode`: Optimization mode (optional, defaults to `io_optimized`)
+4. `overwrite`: Set to `overwrite` to force reprocessing of existing files (optional)
 
 ### Optimization Modes
 
@@ -42,7 +56,7 @@ The processing script supports different optimization modes for various workload
 - `balanced`: Uses a balanced approach for mixed workloads
 - `fully_optimized`: Uses I/O optimization for file operations and compute optimization for computational tasks
 
-To specify a different optimization mode:
+To specify a different optimization mode when running the Python script directly:
 
 ```bash
 python process_single_variable.py --year 1980 --variable t2_mean --optimization_mode compute_optimized
@@ -72,11 +86,57 @@ The job submission script provides several options for controlling job submissio
 
 - `--max_concurrent`: Maximum number of concurrent jobs (default: 20)
 - `--optimization_mode`: Optimization mode for worker configuration (choices: balanced, io_optimized, compute_optimized, fully_optimized; default: io_optimized)
-- `--use_job_arrays`: Use SLURM job arrays for years (one array per variable)
 - `--no_submit`: Generate job scripts but don't submit them
 - `--output_dir`: Output directory (default from config)
 - `--wait_time`: Wait time in seconds between job submissions (default: 2)
 - `--verbose`: Enable verbose logging
+
+## Advanced Command Line Options
+
+The `process_single_variable.py` script provides additional options for fine-tuning processing:
+
+### Input/Output Options
+
+- `--input_dir`: Directory containing ERA5 data (default from config)
+- `--output_dir`: Directory for output files (default from config)
+- `--geo_file`: Path to WRF geo_em file for projection information (default from config)
+- `--fn_str`: File pattern for input files (default from config)
+- `--overwrite`: Overwrite existing output files (default: False)
+
+### Performance Options
+
+- `--cores`: Number of cores to use (default: auto-detect)
+- `--memory_limit`: Memory limit for Dask workers (default: 16GB)
+- `--optimization_mode`: Optimization mode (default: io_optimized)
+- `--generate_report`: Generate a Dask performance report (saves to `~/<variable>_<year>_performance.html`)
+
+Example with advanced options:
+
+```bash
+python process_single_variable.py \
+    --year 1980 \
+    --variable t2_mean \
+    --cores 24 \
+    --memory_limit "85GB" \
+    --optimization_mode "compute_optimized" \
+    --recurse_limit 100 \
+    --generate_report
+```
+
+## Configuration and Environment Variables
+
+Many default values come from `config.py`, which reads from environment variables with sensible defaults. The following environment variables can be set to override defaults:
+
+- `ERA5_INPUT_DIR`: Input directory (default: "/beegfs/CMIP6/wrf_era5/04km")
+- `ERA5_OUTPUT_DIR`: Output directory (default: "/beegfs/CMIP6/cparr4/daily_downscaled_era5_for_rasdaman")
+- `ERA5_START_YEAR`: Default start year (default: 1980)
+- `ERA5_END_YEAR`: Default end year (default: 1990)
+- `ERA5_DATA_VARS`: Comma-separated list of variables to process
+- `ERA5_INPUT_PATTERN`: File pattern for input files (default: "era5_wrf_dscale_4km_{date}.nc")
+- `ERA5_OUTPUT_TEMPLATE`: Template for output files (default: "era5_wrf_dscale_4km_{datavar}_{year}_3338.nc")
+- `GEO_EM_FILE`: Path to WRF geo_em file (default: "/beegfs/CMIP6/wrf_era5/geo_em.d02.nc")
+- `ERA5_OPTIMIZATION_MODE`: Default optimization mode (default: "io_optimized")
+- `ERA5_OVERWRITE`: Whether to overwrite existing files (default: False)
 
 ## Monitoring Progress
 
@@ -121,6 +181,37 @@ To customize the processing:
 1. Edit `process_single_variable.py` to modify the core processing logic
 2. Edit `process_era5_variable.sbatch` to adjust resource requests (memory, CPU cores, time)
 3. Edit `submit_era5_jobs.py` to change job submission behavior
+4. Modify environment variables or edit `config.py` to change default configurations
+
+### Input File Pattern
+
+The input file pattern uses the `{date}` placeholder which is automatically expanded to include wildcards when searching for files. For example, with the default pattern `era5_wrf_dscale_4km_{date}.nc` and a specific year (e.g., 1980), the script looks for files matching `era5_wrf_dscale_4km_1980-*.nc` in the year's directory.
+
+## Memory Management and Optimization
+
+The pipeline includes several features for managing memory and optimizing performance:
+
+### Memory Monitoring
+
+Memory monitoring is now always enabled and logs memory usage every 5 seconds. This provides continuous visibility into memory usage throughout the processing pipeline, which can help identify memory bottlenecks without requiring any additional configuration.
+
+### Handling Recursion Errors
+
+For complex data structures, you may encounter recursion errors in Dask. Increase the recursion limit:
+
+```bash
+python process_single_variable.py --year 1980 --variable t2_mean --recurse_limit 100
+```
+
+### Performance Reporting
+
+Generate Dask performance reports to analyze bottlenecks:
+
+```bash
+python process_single_variable.py --year 1980 --variable t2_mean --generate_report
+```
+
+This creates an HTML report in your home directory: `~/<variable>_<year>_performance.html`
 
 ## Troubleshooting
 
@@ -129,7 +220,9 @@ Common issues and solutions:
 - **Job fails with out-of-memory error**: Increase the memory in the sbatch script or adjust chunk sizes in `process_single_variable.py`
 - **Processing is slow**: Adjust the chunk sizes or increase the CPU cores
 - **Job times out**: Increase the time limit in the sbatch script
-- **Too many jobs in queue**: Decrease the `--max_concurrent` parameter or use job arrays
+- **Too many jobs in queue**: Decrease the `--max_concurrent` parameter
 - **Missing variable**: Check that the variable name is correct and exists in `era5_variables.py`
+- **RecursionError**: Increase the `--recurse_limit` parameter (default: 50)
+- **OOM killed by SLURM**: Increase memory allocation in sbatch script or reduce chunk sizes
 
-For more detailed diagnostic information, check the Dask performance reports that are generated when using the `--generate_report` flag. 
+For more detailed diagnostic information, check the Dask performance reports that are generated when using the `--generate_report` flag. Memory monitoring logs can also help identify where memory usage spikes. 
