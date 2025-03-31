@@ -3,7 +3,7 @@
 
 This script generates SLURM job submissions for processing ERA5 variables for
 specified years. It provides options for controlling the number of concurrent
-jobs and generating job arrays where appropriate.
+jobs.
 
 Example usage:
     # Process t2_mean for years 1980-1985
@@ -99,11 +99,6 @@ def parse_args() -> argparse.Namespace:
         help=f"Optimization mode for worker configuration (default: {config.OPTIMIZATION_MODE})"
     )
     parser.add_argument(
-        "--use_job_arrays",
-        action="store_true",
-        help="Use SLURM job arrays for years (one array per variable)"
-    )
-    parser.add_argument(
         "--no_submit",
         action="store_true",
         help="Generate job scripts but don't submit them"
@@ -124,6 +119,11 @@ def parse_args() -> argparse.Namespace:
         "--verbose",
         action="store_true",
         help="Enable verbose logging"
+    )
+    parser.add_argument(
+        "--overwrite",
+        action="store_true",
+        help="Overwrite existing output files"
     )
     
     args = parser.parse_args()
@@ -185,7 +185,8 @@ def submit_individual_jobs(
     max_concurrent: int,
     no_submit: bool,
     wait_time: int,
-    optimization_mode: str = config.OPTIMIZATION_MODE
+    optimization_mode: str = config.OPTIMIZATION_MODE,
+    overwrite: bool = False
 ) -> Dict[str, List[str]]:
     """Submit individual jobs for each variable and year.
     
@@ -197,6 +198,7 @@ def submit_individual_jobs(
         no_submit: Whether to skip job submission
         wait_time: Wait time between job submissions
         optimization_mode: Optimization mode for worker configuration
+        overwrite: Whether to overwrite existing output files
     
     Returns:
         Dictionary mapping variables to lists of job IDs
@@ -244,6 +246,8 @@ def submit_individual_jobs(
                 # Submit the job with log directory specified
                 log_file = log_dir.joinpath(f"era5_{variable}_{year}.out")
                 cmd = ["sbatch", "--output", str(log_file), "process_era5_variable.sbatch", str(year), variable, optimization_mode]
+                if overwrite:
+                    cmd.append("overwrite")
                 logging.info(f"Submitting: {' '.join(cmd)}")
                 
                 try:
@@ -268,170 +272,6 @@ def submit_individual_jobs(
     return job_ids
 
 
-def generate_job_array(
-    variable: str,
-    start_year: int,
-    end_year: int,
-    output_dir: Path,
-    optimization_mode: str = config.OPTIMIZATION_MODE
-) -> Tuple[Path, str]:
-    """Generate a job array script for a variable.
-    
-    Args:
-        variable: Variable to process
-        start_year: Start year for processing
-        end_year: End year for processing
-        output_dir: Output directory for results
-        optimization_mode: Optimization mode for worker configuration
-    
-    Returns:
-        Tuple of (script path, year list string)
-    """
-    # Create scripts directory if it doesn't exist
-    scripts_dir = Path("job_scripts")
-    scripts_dir.mkdir(exist_ok=True)
-    
-    # Create log directory for this variable
-    log_dir = create_log_directory(variable)
-    
-    # Create year mapping file for array jobs
-    year_map_file = scripts_dir / f"{variable}_{start_year}_{end_year}_year_map.txt"
-    
-    # Write year mapping
-    with open(year_map_file, "w") as f:
-        for i, year in enumerate(range(start_year, end_year + 1), 1):
-            f.write(f"{i}\t{year}\n")
-    
-    # Get array size
-    array_size = end_year - start_year + 1
-    
-    # Create the script content using explicit string construction to ensure variables are properly interpolated
-    script_content = "#!/bin/bash\n"
-    script_content += f"#SBATCH --job-name=era5_{variable}\n"
-    script_content += "#SBATCH --nodes=1\n"
-    script_content += "#SBATCH --ntasks=1\n"
-    script_content += "#SBATCH --cpus-per-task=24\n"
-    script_content += "#SBATCH --mem=96G\n"
-    script_content += "#SBATCH --time=2:00:00\n"
-    script_content += "#SBATCH --partition=t2small\n"
-    script_content += f"#SBATCH --output={log_dir}/era5_{variable}_%A_%a.out\n"
-    script_content += f"#SBATCH --array=1-{array_size}%5\n\n"
-    
-    script_content += "# Get year from year map file\n"
-    script_content += f"YEAR_FILE={year_map_file}\n"
-    script_content += "YEAR=$(awk -v idx=$SLURM_ARRAY_TASK_ID '{if($1==idx) print $2}' $YEAR_FILE)\n\n"
-    
-    script_content += "if [ -z \"$YEAR\" ]; then\n"
-    script_content += "    echo \"Error: Could not determine year for array task $SLURM_ARRAY_TASK_ID\"\n"
-    script_content += "    exit 1\n"
-    script_content += "fi\n\n"
-    
-    script_content += "echo \"Starting at $(date)\"\n"
-    script_content += "echo \"Running on $(hostname)\"\n"
-    script_content += f"echo \"Processing variable {variable} for year $YEAR\"\n\n"
-    
-    script_content += "# Activate conda environment\n"
-    script_content += "source $HOME/miniconda3/etc/profile.d/conda.sh\n"
-    script_content += "conda activate snap-geo\n\n"
-    
-    script_content += "# Install psutil if it's not already available\n"
-    script_content += "if ! python -c \"import psutil\" &> /dev/null; then\n"
-    script_content += "    echo \"Installing psutil for memory monitoring\"\n"
-    script_content += "    pip install psutil\n"
-    script_content += "fi\n\n"
-    
-    script_content += "# Set OpenMP threads\n"
-    script_content += "export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK\n\n"
-    
-    script_content += "# Run the Python script with optimized settings\n"
-    script_content += "python process_single_variable.py \\\n"
-    script_content += "    --year $YEAR \\\n"
-    script_content += f"    --variable {variable} \\\n"
-    script_content += "    --cores $SLURM_CPUS_PER_TASK \\\n"
-    script_content += "    --memory_limit \"85GB\" \\\n"
-    script_content += f"    --optimization_mode \"{optimization_mode}\" \\\n"
-    script_content += "    --monitor_memory \\\n"
-    script_content += "    --monitor_interval 30 \\\n"
-    script_content += "    --recurse_limit 100\n\n"
-    
-    script_content += "# Check the exit status\n"
-    script_content += "if [ $? -eq 0 ]; then\n"
-    script_content += "    echo \"Processing completed successfully\"\n"
-    script_content += "else\n"
-    script_content += "    EXIT_CODE=$?\n"
-    script_content += "    echo \"Processing failed with exit code $EXIT_CODE\"\n"
-    script_content += "    exit $EXIT_CODE\n"
-    script_content += "fi\n\n"
-    
-    script_content += "echo \"Finished at $(date)\"\n"
-    
-    # Write the script to file
-    script_path = scripts_dir.joinpath(f"process_{variable}_{start_year}_{end_year}.sbatch")
-    with open(script_path, "w") as f:
-        f.write(script_content)
-    
-    return script_path, script_content
-
-
-def submit_job_arrays(
-    variables: List[str],
-    start_year: int,
-    end_year: int,
-    output_dir: Path,
-    no_submit: bool,
-    wait_time: int,
-    optimization_mode: str = config.OPTIMIZATION_MODE
-) -> Dict[str, str]:
-    """Submit job arrays for each variable.
-    
-    Args:
-        variables: List of variables to process
-        start_year: Start year for processing
-        end_year: End year for processing
-        output_dir: Output directory for results
-        no_submit: Whether to skip job submission
-        wait_time: Wait time between job submissions
-        optimization_mode: Optimization mode for worker configuration
-    
-    Returns:
-        Dictionary mapping variables to job array IDs
-    """
-    job_ids = {}
-    
-    for variable in variables:
-        # Generate job array script
-        script_path, _ = generate_job_array(variable, start_year, end_year, output_dir, optimization_mode)
-        
-        # Submit the job
-        if no_submit:
-            logging.info(f"Would submit job array for variable {variable}, years {start_year}-{end_year}")
-            job_id = f"DUMMY_{variable}_array"
-        else:
-            cmd = ["sbatch", str(script_path)]
-            logging.info(f"Submitting: {' '.join(cmd)}")
-            
-            try:
-                result = subprocess.run(
-                    cmd,
-                    capture_output=True,
-                    text=True,
-                    check=True
-                )
-                job_id = result.stdout.strip().split()[-1]
-                logging.info(f"Submitted job array {job_id} for variable {variable}, years {start_year}-{end_year}")
-                time.sleep(wait_time)  # Avoid overwhelming the scheduler
-            except subprocess.CalledProcessError as e:
-                logging.error(f"Failed to submit job array for {variable}: {e}")
-                logging.error(f"stdout: {e.stdout}")
-                logging.error(f"stderr: {e.stderr}")
-                job_id = None
-        
-        if job_id:
-            job_ids[variable] = job_id
-    
-    return job_ids
-
-
 def main() -> None:
     """Main function for job submission."""
     # Parse command line arguments
@@ -441,29 +281,17 @@ def main() -> None:
     # Get variables to process
     variables = get_variables_to_process(args)
     
-    # Submit jobs
-    if args.use_job_arrays:
-        # Submit job arrays (one array per variable)
-        job_ids = submit_job_arrays(
-            variables,
-            args.start_year,
-            args.end_year,
-            args.output_dir,
-            args.no_submit,
-            args.wait_time,
-            args.optimization_mode
-        )
-    else:
-        # Submit individual jobs
-        job_ids = submit_individual_jobs(
-            variables,
-            args.start_year,
-            args.end_year,
-            args.max_concurrent,
-            args.no_submit,
-            args.wait_time,
-            args.optimization_mode
-        )
+    # Submit individual jobs
+    job_ids = submit_individual_jobs(
+        variables,
+        args.start_year,
+        args.end_year,
+        args.max_concurrent,
+        args.no_submit,
+        args.wait_time,
+        args.optimization_mode,
+        args.overwrite
+    )
     
     # Print summary
     if args.no_submit:
