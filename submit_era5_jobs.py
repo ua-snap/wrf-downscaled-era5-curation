@@ -27,7 +27,10 @@ from typing import List, Tuple, Dict
 
 from era5_variables import era5_datavar_lut, list_all_variables
 from config import config
-from utils.logging import configure_logging
+from utils.logging import configure_logging, get_logger, get_log_file_path, create_log_directory, setup_variable_logging
+
+# Get a named logger for this module
+logger = get_logger(__name__)
 
 
 def parse_args() -> argparse.Namespace:
@@ -78,13 +81,6 @@ def parse_args() -> argparse.Namespace:
         help="Maximum number of concurrent jobs (default: 20)"
     )
     parser.add_argument(
-        "--optimization_mode",
-        type=str,
-        choices=["balanced", "io_optimized", "compute_optimized", "fully_optimized"],
-        default=config.OPTIMIZATION_MODE,
-        help=f"Optimization mode for worker configuration (default: {config.OPTIMIZATION_MODE})"
-    )
-    parser.add_argument(
         "--output_dir",
         type=Path,
         default=config.OUTPUT_DIR,
@@ -127,8 +123,8 @@ def get_variables_to_process(args: argparse.Namespace) -> List[str]:
     return variables
 
 
-def create_log_directory(variable: str) -> Path:
-    """Create a log directory for a variable.
+def create_job_log_directory(variable: str) -> Path:
+    """Create a log directory for a variable's job outputs.
     
     Creates a directory structure: logs/era5_process/{variable}
     
@@ -138,11 +134,10 @@ def create_log_directory(variable: str) -> Path:
     Returns:
         Path to the log directory
     """
-    # Create the log directory structure
-    log_dir = Path("logs/era5_process").joinpath(variable)
-    log_dir.mkdir(parents=True, exist_ok=True)
+    # Create the log directory structure using the utility function
+    log_dir = create_log_directory(Path.cwd(), f"era5_process/{variable}")
     
-    logging.info(f"Created log directory: {log_dir}")
+    logger.info(f"Created log directory: {log_dir}")
     return log_dir
 
 
@@ -151,7 +146,6 @@ def submit_individual_jobs(
     start_year: int,
     end_year: int,
     max_concurrent: int,
-    optimization_mode: str = config.OPTIMIZATION_MODE,
     overwrite: bool = False
 ) -> Dict[str, List[str]]:
     """Submit individual jobs for each variable and year.
@@ -161,7 +155,6 @@ def submit_individual_jobs(
         start_year: Start year for processing
         end_year: End year for processing
         max_concurrent: Maximum number of concurrent jobs
-        optimization_mode: Optimization mode for worker configuration
         overwrite: Whether to overwrite existing output files
     
     Returns:
@@ -172,14 +165,14 @@ def submit_individual_jobs(
     
     # Count total jobs
     total_jobs = len(variables) * (end_year - start_year + 1)
-    logging.info(f"Preparing to submit {total_jobs} jobs for {len(variables)} variables and {end_year - start_year + 1} years")
+    logger.info(f"Preparing to submit {total_jobs} jobs for {len(variables)} variables and {end_year - start_year + 1} years")
     
     # Process each variable and year
     for variable in variables:
         job_ids[variable] = []
         
         # Create log directory for this variable
-        log_dir = create_log_directory(variable)
+        log_dir = create_job_log_directory(variable)
         
         for year in range(start_year, end_year + 1):
             # Submit the job
@@ -198,18 +191,18 @@ def submit_individual_jobs(
                     if current_jobs < max_concurrent:
                         break
                     
-                    logging.info(f"Currently {current_jobs} jobs in queue, waiting for some to complete...")
+                    logger.info(f"Currently {current_jobs} jobs in queue, waiting for some to complete...")
                     time.sleep(30)  # Wait 30 seconds before checking again
                 except subprocess.CalledProcessError:
-                    logging.warning("Failed to check current job count, proceeding with submission")
+                    logger.warning("Failed to check current job count, proceeding with submission")
                     break
             
             # Submit the job with log directory specified
             log_file = log_dir.joinpath(f"era5_{variable}_{year}.out")
-            cmd = ["sbatch", "--output", str(log_file), "process_era5_variable.sbatch", str(year), variable, optimization_mode]
+            cmd = ["sbatch", "--output", str(log_file), "process_era5_variable.sbatch", str(year), variable,]
             if overwrite:
                 cmd.append("overwrite")
-            logging.info(f"Submitting: {' '.join(cmd)}")
+            logger.info(f"Submitting: {' '.join(cmd)}")
             
             try:
                 result = subprocess.run(
@@ -219,12 +212,12 @@ def submit_individual_jobs(
                     check=True
                 )
                 job_id = result.stdout.strip().split()[-1]
-                logging.info(f"Submitted job {job_id} for variable {variable}, year {year}")
+                logger.info(f"Submitted job {job_id} for variable {variable}, year {year}")
                 time.sleep(wait_time)  # Avoid overwhelming the scheduler
             except subprocess.CalledProcessError as e:
-                logging.error(f"Failed to submit job for {variable}, year {year}: {e}")
-                logging.error(f"stdout: {e.stdout}")
-                logging.error(f"stderr: {e.stderr}")
+                logger.error(f"Failed to submit job for {variable}, year {year}: {e}")
+                logger.error(f"stdout: {e.stdout}")
+                logger.error(f"stderr: {e.stderr}")
                 job_id = None
         
         if job_id:
@@ -235,28 +228,33 @@ def submit_individual_jobs(
 
 def main() -> None:
     """Main function for job submission."""
-    configure_logging()
-    # Parse command line arguments
-    args = parse_args()
-    
-    # Get variables to process
-    variables = get_variables_to_process(args)
-    
-    # Submit individual jobs
-    job_ids = submit_individual_jobs(
-        variables,
-        args.start_year,
-        args.end_year,
-        args.max_concurrent,
-        args.optimization_mode,
-        args.overwrite
+    # Configure logging for the job submission process
+    setup_variable_logging(
+        variable="submit_era5_jobs",
+        base_dir=Path.cwd(),
+        verbose=False
     )
     
-    # Print summary
-    logging.info(f"Submitted jobs for {len(variables)} variables and {args.end_year - args.start_year + 1} years")
+    args = parse_args()
     
-    total_jobs = sum(len(jobs) if isinstance(jobs, list) else 1 for jobs in job_ids.values())
-    logging.info(f"Total jobs submitted: {total_jobs}")
+    # Process variables
+    variables = get_variables_to_process(args)
+    
+    # Submit jobs
+    job_ids = submit_individual_jobs(
+        variables=variables,
+        start_year=args.start_year,
+        end_year=args.end_year,
+        max_concurrent=args.max_concurrent,
+        overwrite=args.overwrite
+    )
+    
+    logger.info(f"Job submission complete. Submitted jobs for {len(job_ids)} variables.")
+    for variable, ids in job_ids.items():
+        if ids:
+            logger.info(f"  - {variable}: {len(ids)} jobs submitted")
+    
+    logger.info("Done.")
 
 
 if __name__ == "__main__":

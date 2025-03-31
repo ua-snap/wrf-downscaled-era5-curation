@@ -33,38 +33,10 @@ from utils.dask_utils import (
     configure_dask_memory,
     get_performance_report_context
 )
+from utils.logging import configure_logging, get_logger, get_log_file_path, setup_variable_logging
 
-
-def setup_logging(verbose: bool = False) -> None:
-    """Set up logging configuration.
-    
-    Logs are written to both console and a file in the user's home directory
-    (~/era5_processing.log). If the home directory is not accessible, falls back
-    to console-only logging.
-    
-    Args:
-        verbose: Whether to use verbose logging
-    """
-    log_level = logging.DEBUG if verbose else logging.INFO
-    
-    try:
-        # Create log file in user's home directory
-        log_file = Path.home() / "era5_processing.log"
-        handlers = [
-            logging.StreamHandler(),
-            logging.FileHandler(log_file)
-        ]
-    except Exception as e:
-        logging.warning(f"Could not access home directory for log file: {e}")
-        logging.warning("Falling back to console-only logging")
-        handlers = [logging.StreamHandler()]
-    
-    logging.basicConfig(
-        level=log_level,
-        format="%(asctime)s - %(levelname)s - %(message)s",
-        handlers=handlers
-    )
-
+# Get a named logger for this module
+logger = get_logger(__name__)
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments.
@@ -137,19 +109,13 @@ def parse_args() -> argparse.Namespace:
         action="store_true",
         help="Generate a Dask performance report"
     )
-    parser.add_argument(
-        "--recurse_limit",
-        type=int,
-        default=50,
-        help="Recursion limit for Dask sizeof function (default: 50)"
-    )
     args = parser.parse_args()
     
     # Validate the variable
     if args.variable not in era5_datavar_lut:
-        logging.error(f"Variable '{args.variable}' not found in ERA5 variable lookup table")
+        logger.error(f"Variable '{args.variable}' not found in ERA5 variable lookup table")
         available_vars = list(era5_datavar_lut.keys())
-        logging.error(f"Available variables: {', '.join(available_vars[:10])}...")
+        logger.error(f"Available variables: {', '.join(available_vars[:10])}...")
         sys.exit(1)
     
     return args
@@ -180,7 +146,7 @@ def get_year_filepaths(era5_dir: Path, year: int, fn_str: str) -> List[Path]:
     if not fps:
         raise FileNotFoundError(f"No files found for year {year} with pattern {file_pattern}")
     
-    logging.info(f"Found {len(fps)} files for year {year}")
+    logger.info(f"Found {len(fps)} files for year {year}")
     return fps
 
 
@@ -204,7 +170,7 @@ def check_output_exists(output_dir: Path, variable: str, year: int) -> Tuple[boo
     
     exists = output_file.exists()
     if exists:
-        logging.info(f"Output file already exists: {output_file}")
+        logger.info(f"Output file already exists: {output_file}")
     
     return exists, output_file
 
@@ -335,7 +301,7 @@ def read_data(filepaths: List[Path], variable: str, chunks: Dict[str, Union[str,
     
     drop_vars = [v for v in all_vars if v not in keep_vars]
     
-    logging.info(f"Opening files with chunks: {chunks}")
+    logger.info(f"Opening files with chunks: {chunks}")
     
     # Open the dataset with Dask
     ds = xr.open_mfdataset(
@@ -347,7 +313,7 @@ def read_data(filepaths: List[Path], variable: str, chunks: Dict[str, Union[str,
         combine="by_coords"  # Ensure proper combination by coordinates
     )
     
-    logging.info(f"Opened {len(filepaths)} files with Dask")
+    logger.info(f"Opened {len(filepaths)} files with Dask")
     return ds
 
 
@@ -367,7 +333,7 @@ def process_variable(ds: xr.Dataset, variable: str) -> xr.Dataset:
     agg_func = var_info["agg_func"]
     
     # Apply the aggregation function to resample from hourly to daily
-    logging.info(f"Resampling variable {variable} ({source_var}) to daily frequency")
+    logger.info(f"Resampling variable {variable} ({source_var}) to daily frequency")
     
     # Extract the variable data array and resample
     da = ds[source_var]
@@ -436,7 +402,7 @@ def write_output(ds: xr.Dataset, output_file: Path) -> None:
     ds.attrs["credit"] = "Chris Waigl"
     
     # Write to NetCDF file
-    logging.info(f"Writing output to {output_file}")
+    logger.info(f"Writing output to {output_file}")
     ds.to_netcdf(
         output_file,
         engine="h5netcdf",
@@ -444,7 +410,7 @@ def write_output(ds: xr.Dataset, output_file: Path) -> None:
             var: {"zlib": True, "complevel": 5} for var in ds.data_vars
         }
     )
-    logging.info(f"Successfully wrote output to {output_file}")
+    logger.info(f"Successfully wrote output to {output_file}")
 
 
 def process_variable_for_year(
@@ -481,7 +447,7 @@ def process_variable_for_year(
     # Check if output already exists
     exists, output_file = check_output_exists(output_dir, variable, year)
     if exists and not overwrite and not generate_report:
-        logging.info(f"Output file {output_file} already exists, skipping (overwrite=False)")
+        logger.info(f"Output file {output_file} already exists, skipping (overwrite=False)")
         return
     
     # Initialize client variables outside try block
@@ -499,19 +465,19 @@ def process_variable_for_year(
             chunks = get_variable_chunks(variable)
             
             # ===== I/O PHASE =====
-            logging.info("Starting I/O phase with io_bound configuration")
+            logger.info("Starting I/O phase with io_bound configuration")
             io_client, io_cluster = get_dask_client(cores, memory_limit, "io_bound")
             
             # Get grid information
-            logging.info(f"Retrieving grid information from {geo_file}")
+            logger.info(f"Retrieving grid information from {geo_file}")
             grid_info = get_grid_info(filepaths[0], geo_file)
             
             # Read input data
-            logging.info(f"Reading data for {variable} from {len(filepaths)} files")
+            logger.info(f"Reading data for {variable} from {len(filepaths)} files")
             ds = read_data(filepaths, variable, chunks)
             
             # Process the variable - this is mostly I/O and simple aggregation
-            logging.info(f"Processing variable {variable}")
+            logger.info(f"Processing variable {variable}")
             processed_ds = process_variable(ds, variable)
             
             # Clean up intermediate data to free memory
@@ -519,16 +485,16 @@ def process_variable_for_year(
             io_client.run(lambda: gc.collect())  # Trigger garbage collection on workers
             
             # Close I/O client
-            logging.info("Closing I/O phase Dask client")
+            logger.info("Closing I/O phase Dask client")
             io_client.close()
             io_cluster.close()
             
             # ===== COMPUTATION PHASE =====
-            logging.info("Starting computation phase with balanced configuration")
+            logger.info("Starting computation phase with balanced configuration")
             compute_client, compute_cluster = get_dask_client(cores, memory_limit, "balanced")
             
             # Regrid to EPSG:3338 - computation intensive
-            logging.info(f"Reprojecting data to EPSG:3338")
+            logger.info(f"Reprojecting data to EPSG:3338")
             reprojected_ds = regrid_to_3338(processed_ds, grid_info)
             
             # Clean up intermediate data to free memory
@@ -536,7 +502,7 @@ def process_variable_for_year(
             compute_client.run(lambda: gc.collect())  # Trigger garbage collection on workers
             
             # Write output
-            logging.info(f"Writing output to {output_file}")
+            logger.info(f"Writing output to {output_file}")
             write_output(reprojected_ds, output_file)
             
             # Clean up final data
@@ -546,21 +512,21 @@ def process_variable_for_year(
         return output_file
     
     except RecursionError as e:
-        logging.error(f"RecursionError processing {variable} for year {year}: {e}")
-        logging.error("Try increasing dask.config.set({'distributed.worker.memory.sizeof.sizeof-recurse-limit': 100})")
+        logger.error(f"RecursionError processing {variable} for year {year}: {e}")
+        logger.error("Try increasing dask.config.set({'distributed.worker.memory.sizeof.sizeof-recurse-limit': 100})")
         import traceback
-        logging.error(traceback.format_exc())
+        logger.error(traceback.format_exc())
         return None
     except MemoryError as e:
-        logging.error(f"MemoryError processing {variable} for year {year}: {e}")
-        logging.error("Try increasing memory_limit in the SLURM script and reducing chunk sizes")
+        logger.error(f"MemoryError processing {variable} for year {year}: {e}")
+        logger.error("Try increasing memory_limit in the SLURM script and reducing chunk sizes")
         import traceback
-        logging.error(traceback.format_exc())
+        logger.error(traceback.format_exc())
         return None
     except Exception as e:
-        logging.error(f"Error processing {variable} for year {year}: {e}")
+        logger.error(f"Error processing {variable} for year {year}: {e}")
         import traceback
-        logging.error(traceback.format_exc())
+        logger.error(traceback.format_exc())
         return None
     
     finally:
@@ -587,20 +553,20 @@ def process_variable_for_year(
             except:
                 pass
             
-        logging.info(f"Closed all Dask clients and clusters")
+        logger.info(f"Closed all Dask clients and clusters")
 
 
 def main() -> None:
     """Main processing function."""
     # Parse and validate arguments
     args = parse_args()
-    setup_logging(args.verbose)
     
-    # Update recursion limit if specified
-    if args.recurse_limit != 50:
-        logging.info(f"Setting Dask recursion limit to {args.recurse_limit}")
-        from utils.dask_utils import dask
-        dask.config.set({"distributed.worker.memory.sizeof.sizeof-recurse-limit": args.recurse_limit})
+    # Set up logging using the centralized variable logging function
+    setup_variable_logging(
+        variable=args.variable,
+        year=args.year,
+        base_dir=Path.cwd(),
+    )
     
     start_mem_monitor()
     
@@ -625,10 +591,10 @@ def main() -> None:
         )
         
         if result:
-            logging.info(f"Successfully processed {variable} for year {year}")
+            logger.info(f"Successfully processed {variable} for year {year}")
             sys.exit(0)
         else:
-            logging.error(f"Failed to process {variable} for year {year}")
+            logger.error(f"Failed to process {variable} for year {year}")
             sys.exit(1)
     finally:
         stop_mem_monitor()

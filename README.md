@@ -38,7 +38,7 @@ sbatch process_era5_variable.sbatch 1980 t2_mean
 sbatch process_era5_variable.sbatch 1980 t2_mean overwrite
 ```
 
-The SLURM script accepts up to four parameters:
+The SLURM script accepts up to three parameters:
 1. `year`: Year to process (required)
 2. `variable`: Variable to process (required)
 3. `overwrite`: Set to `overwrite` to force reprocessing of existing files (optional)
@@ -57,9 +57,6 @@ python submit_era5_jobs.py --variables t2_mean,t2_min,t2_max --start_year 1990 -
 
 # Process all available variables for a single year
 python submit_era5_jobs.py --all_variables --start_year 2000 --end_year 2000
-
-# Process with a specific optimization mode
-python submit_era5_jobs.py --variable t2_mean --start_year 1980 --end_year 1985 --optimization_mode compute_optimized
 ```
 
 ### Job Submission Options
@@ -95,7 +92,6 @@ python process_single_variable.py \
     --variable t2_mean \
     --cores 24 \
     --memory_limit "85GB" \
-    --recurse_limit 100 \
     --generate_report
 ```
 

@@ -15,6 +15,10 @@ from contextlib import nullcontext
 
 from dask.distributed import LocalCluster, Client, performance_report
 import dask
+from utils.logging import get_logger
+
+# Get a named logger for this module
+logger = get_logger(__name__)
 
 
 def calculate_worker_config(cores: int, task_type: str = "balanced") -> Tuple[int, int]:
@@ -118,13 +122,13 @@ def get_dask_client(cores: Optional[int] = None,
         if "SLURM_CPUS_PER_TASK" in os.environ:
             slurm_cores = int(os.environ["SLURM_CPUS_PER_TASK"])
             cores = slurm_cores if cores is None else min(cores, slurm_cores)
-            logging.info(f"Using {cores} cores from SLURM allocation")
+            logger.info(f"Using {cores} cores from SLURM allocation")
         
         # Check for memory allocation in SLURM
         if "SLURM_MEM_PER_NODE" in os.environ:
             slurm_mem_mb = int(os.environ["SLURM_MEM_PER_NODE"])
             slurm_mem_gb = slurm_mem_mb / 1024
-            logging.info(f"SLURM memory allocation: {slurm_mem_gb:.1f}GB")
+            logger.info(f"SLURM memory allocation: {slurm_mem_gb:.1f}GB")
     
     # If cores is still None, use CPU count
     if cores is None:
@@ -157,12 +161,12 @@ def get_dask_client(cores: Optional[int] = None,
         memory_limit=memory_per_worker
     )
     
-    logging.info(f"Created Dask LocalCluster [{task_type} mode] with {n_workers} workers, "
+    logger.info(f"Created Dask LocalCluster [{task_type} mode] with {n_workers} workers, "
                  f"{threads_per_worker} threads per worker, and {memory_per_worker} memory per worker")
     
     # Create a client
     client = Client(cluster)
-    logging.info(f"Dask dashboard available at: {client.dashboard_link}")
+    logger.info(f"Dask dashboard available at: {client.dashboard_link}")
     
     return client, cluster
 
@@ -177,13 +181,10 @@ def configure_dask_memory() -> None:
         "distributed.worker.memory.spill": 0.85,  # Spill to disk at 85% memory
         "distributed.worker.memory.target": 0.75,  # Target 75% memory usage
         "distributed.worker.memory.pause": 0.95,   # Pause execution at 95% memory
-        "distributed.worker.memory.terminate": 0.98  # Terminate at 98% memory
-    })
-    
-    # Set recursion limit to prevent RecursionError
-    dask.config.set({"distributed.worker.memory.sizeof.sizeof-recurse-limit": 50})
-    
-    logging.info("Configured Dask memory management settings")
+        "distributed.worker.memory.terminate": 0.98,  # Terminate at 98% memory
+        "distributed.worker.memory.sizeof.sizeof-recurse-limit": 100 #recursion limit to prevent RecursionError
+    }) 
+    logger.info("Configured Dask memory management settings")
 
 
 def get_performance_report_context(variable: str, year: int, generate_report: bool = False) -> Any:
@@ -205,6 +206,6 @@ def get_performance_report_context(variable: str, year: int, generate_report: bo
         perf_file = str(Path.home() / f"{variable}_{year}_performance.html")
         return performance_report(filename=perf_file)
     except Exception as e:
-        logging.warning(f"Could not access home directory for performance report: {e}")
-        logging.warning("Falling back to current directory for performance report")
+        logger.warning(f"Could not access home directory for performance report: {e}")
+        logger.warning("Falling back to current directory for performance report")
         return performance_report(filename=f"{variable}_{year}_performance.html") 

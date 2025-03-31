@@ -32,8 +32,7 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 # Get command line arguments
 YEAR=$1
 VARIABLE=$2
-OPTIMIZATION_MODE=${3:-io_optimized}  # Default to io_optimized if not provided
-OVERWRITE=$4  # Optional, set to "overwrite" to force reprocessing
+OVERWRITE=$3  # Optional, set to "overwrite" to force reprocessing
 
 # Validate arguments
 if [ -z "$YEAR" ] || [ -z "$VARIABLE" ]; then
@@ -46,7 +45,6 @@ fi
 mkdir -p logs/era5_process/${VARIABLE}
 
 echo "Processing variable $VARIABLE for year $YEAR"
-echo "Using optimization mode: $OPTIMIZATION_MODE"
 
 # Set overwrite environment variable if requested
 if [ "$OVERWRITE" = "overwrite" ]; then
@@ -56,15 +54,13 @@ else
     export ERA5_OVERWRITE="false"
 fi
 
-# Run the Python script with optimized settings
+# Run the Python script
 python process_single_variable.py \
     --year $YEAR \
     --variable $VARIABLE \
     --cores $SLURM_CPUS_PER_TASK \
     --memory_limit "85GB" \
-    --optimization_mode "$OPTIMIZATION_MODE" \
-    --recurse_limit 100
-
+    --overwrite $OVERWRITE
 # Check the exit status
 if [ $? -eq 0 ]; then
     echo "Processing completed successfully"

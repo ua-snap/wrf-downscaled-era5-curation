@@ -3,6 +3,10 @@ import logging
 import threading
 import time
 import psutil
+from utils.logging import get_logger
+
+# Get a named logger for this module
+logger = get_logger(__name__)
 
 def start():
     """Start memory monitoring."""
@@ -13,13 +17,13 @@ def start():
     _active = True
     _monitor_thread = threading.Thread(target=_monitor, daemon=True)
     _monitor_thread.start()
-    logging.info("Memory monitoring started (5s intervals)")
+    logger.info("Memory monitoring started (5s intervals)")
 
 def stop():
     """Stop memory monitoring."""
     global _active
     _active = False
-    logging.info("Memory monitoring stopped")
+    logger.info("Memory monitoring stopped")
 
 def _monitor():
     """Monitoring loop."""
@@ -27,10 +31,10 @@ def _monitor():
     while _active:
         try:
             usage = proc.memory_info().rss / (1024**3)  # GB
-            logging.info(f"Memory: {usage:.2f} GB")
+            logger.info(f"Memory: {usage:.2f} GB")
             time.sleep(5)
         except Exception as e:
-            logging.error(f"Monitoring error: {str(e)}")
+            logger.error(f"Monitoring error: {str(e)}")
             break
 
 _active = False
