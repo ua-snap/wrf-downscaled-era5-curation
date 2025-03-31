@@ -47,19 +47,6 @@ class Config:
     # Performance optimization mode
     OPTIMIZATION_MODE: str = getenv("ERA5_OPTIMIZATION_MODE", "io_optimized")
 
-    # Overwrite existing files or not
-    # hacky way to handle boolean env vars because they always get passed as strings
-    # python can't interpolate variables using POSIX variable expansion
-    # should look into using a library like python-dotenv
-    OVERWRITE: bool = getenv("ERA5_OVERWRITE", "False").lower() in (
-        "true",
-        "1",
-        "t",
-        "yes",
-        "y",
-    )
-
-
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
         self._validate_years()

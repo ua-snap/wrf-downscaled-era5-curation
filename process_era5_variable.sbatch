@@ -63,8 +63,6 @@ python process_single_variable.py \
     --cores $SLURM_CPUS_PER_TASK \
     --memory_limit "85GB" \
     --optimization_mode "$OPTIMIZATION_MODE" \
-    --monitor_memory \
-    --monitor_interval 60 \
     --recurse_limit 100
 
 # Check the exit status
