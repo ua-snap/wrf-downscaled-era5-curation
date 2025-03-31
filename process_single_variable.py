@@ -18,8 +18,6 @@ from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple, Union
 import time
 import gc
-import threading
-import psutil
 
 import numpy as np
 import xarray as xr
@@ -33,70 +31,7 @@ dask.config.set({"distributed.worker.memory.sizeof.sizeof-recurse-limit": 50})
 
 from era5_variables import era5_datavar_lut
 from config import config
-
-# Global variables for memory monitoring
-_monitoring_active = False
-_monitor_thread = None
-
-
-def monitor_memory(interval=30):
-    """Monitor memory usage and log it periodically.
-    
-    Args:
-        interval: Time between memory usage checks in seconds
-    """
-    global _monitoring_active
-    proc = psutil.Process()
-    
-    while _monitoring_active:
-        try:
-            # Get memory usage
-            mem_info = proc.memory_info()
-            mem_usage_gb = mem_info.rss / (1024 ** 3)  # Convert to GB
-            
-            # Get memory percentage
-            mem_percent = proc.memory_percent()
-            
-            logging.info(f"Memory usage: {mem_usage_gb:.2f} GB ({mem_percent:.1f}%)")
-            
-            # Sleep for the interval
-            time.sleep(interval)
-        except Exception as e:
-            logging.error(f"Error in memory monitoring: {e}")
-            break
-
-
-def start_memory_monitoring(interval=5):
-    """Start monitoring memory usage.
-    
-    Args:
-        interval: Time between memory usage checks in seconds
-    """
-    global _monitoring_active, _monitor_thread
-    
-    if _monitoring_active:
-        logging.warning("Memory monitoring already active")
-        return
-    
-    _monitoring_active = True
-    _monitor_thread = threading.Thread(target=monitor_memory, args=(interval,))
-    _monitor_thread.daemon = True
-    _monitor_thread.start()
-    logging.info("Started memory monitoring")
-
-
-def stop_memory_monitoring():
-    """Stop monitoring memory usage."""
-    global _monitoring_active, _monitor_thread
-    
-    if not _monitoring_active:
-        return
-    
-    _monitoring_active = False
-    if _monitor_thread:
-        _monitor_thread.join(timeout=2)
-        _monitor_thread = None
-    logging.info("Stopped memory monitoring")
+from utils.memory import start as start_mem_monitor, stop as stop_mem_monitor
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -178,10 +113,9 @@ def parse_args() -> argparse.Namespace:
         help=f"File pattern for input files (default: {config.INPUT_FILE_PATTERN})"
     )
     parser.add_argument(
-        "--no_clobber",
+        "--overwrite",
         action="store_true",
-        default=not config.OVERWRITE,
-        help="Skip processing if output file exists"
+        help="Overwrite existing output files"
     )
     
     # Dask configuration
@@ -216,17 +150,6 @@ def parse_args() -> argparse.Namespace:
     )
 
     # Memory monitoring options
-    parser.add_argument(
-        "--monitor_memory",
-        action="store_true",
-        help="Enable memory usage monitoring"
-    )
-    parser.add_argument(
-        "--monitor_interval",
-        type=int,
-        default=30,
-        help="Interval in seconds between memory usage checks (default: 30)"
-    )
     parser.add_argument(
         "--recurse_limit",
         type=int,
@@ -646,8 +569,6 @@ def regrid_to_3338(ds: xr.Dataset, grid_info: Dict[str, Any]) -> xr.Dataset:
     Returns:
         xarray Dataset reprojected to EPSG:3338
     """
-    logging.info("Reprojecting data to EPSG:3338")
-    
     x, y, wrf_crs = [grid_info[k] for k in ["x", "y", "wrf_crs"]]
 
     ds_proj = (
@@ -702,10 +623,8 @@ def process_variable_for_year(
     generate_report: bool = False,
     cores: Optional[int] = None,
     memory_limit: str = "16GB",
-    monitor_memory: bool = False,
-    monitor_interval: int = 30,
-    recurse_limit: int = 50,
-    optimization_mode: str = "io_optimized"
+    optimization_mode: str = "io_optimized",
+    overwrite: bool = False
 ) -> None:
     """Process a single variable for a single year.
     
@@ -725,10 +644,8 @@ def process_variable_for_year(
         generate_report: Whether to generate a Dask performance report
         cores: Number of cores to use (default: auto-detect)
         memory_limit: Memory limit for Dask workers
-        monitor_memory: Whether to monitor memory usage
-        monitor_interval: Interval in seconds between memory usage checks
-        recurse_limit: Recursion limit for Dask sizeof function
         optimization_mode: Optimization mode ("balanced", "io_optimized", or "compute_optimized")
+        overwrite: Whether to overwrite existing output files
     """
     # Map optimization mode to task types for different processing phases
     task_types = {
@@ -749,8 +666,8 @@ def process_variable_for_year(
     
     # Check if output already exists
     exists, output_file = check_output_exists(output_dir, variable, year)
-    if exists and not generate_report:
-        logging.info(f"Output file {output_file} already exists, skipping (no_clobber=False)")
+    if exists and not overwrite and not generate_report:
+        logging.info(f"Output file {output_file} already exists, skipping (overwrite=False)")
         return
     
     # Initialize client variables outside try block
@@ -885,9 +802,7 @@ def main() -> None:
         logging.info(f"Setting Dask recursion limit to {args.recurse_limit}")
         dask.config.set({"distributed.worker.memory.sizeof.sizeof-recurse-limit": args.recurse_limit})
     
-    # Start memory monitoring if requested
-    if args.monitor_memory:
-        start_memory_monitoring(args.monitor_interval)
+    start_mem_monitor()
     
     try:
         # Set up paths
@@ -906,10 +821,8 @@ def main() -> None:
             generate_report=args.generate_report,
             cores=args.cores,
             memory_limit=args.memory_limit,
-            monitor_memory=args.monitor_memory,
-            monitor_interval=args.monitor_interval,
-            recurse_limit=args.recurse_limit,
-            optimization_mode=args.optimization_mode
+            optimization_mode=args.optimization_mode,
+            overwrite=args.overwrite
         )
         
         if result:
@@ -919,9 +832,7 @@ def main() -> None:
             logging.error(f"Failed to process {variable} for year {year}")
             sys.exit(1)
     finally:
-        # Stop memory monitoring if it was started
-        if args.monitor_memory:
-            stop_memory_monitoring()
+        stop_mem_monitor()
 
 
 if __name__ == "__main__":
