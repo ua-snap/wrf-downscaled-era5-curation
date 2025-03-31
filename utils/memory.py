@@ -1,5 +1,5 @@
 """Centralized memory monitoring with 5-second intervals."""
-import logging
+
 import threading
 import time
 import psutil

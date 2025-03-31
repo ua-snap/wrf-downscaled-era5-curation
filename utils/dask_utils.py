@@ -7,10 +7,9 @@ memory allocation, and client creation.
 """
 
 import os
-import logging
 import re
 import math
-from typing import Tuple, Optional, Union, Any, Dict
+from typing import Tuple, Optional, Any
 from contextlib import nullcontext
 
 from dask.distributed import LocalCluster, Client, performance_report
