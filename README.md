@@ -86,10 +86,7 @@ The job submission script provides several options for controlling job submissio
 
 - `--max_concurrent`: Maximum number of concurrent jobs (default: 20)
 - `--optimization_mode`: Optimization mode for worker configuration (choices: balanced, io_optimized, compute_optimized, fully_optimized; default: io_optimized)
-- `--no_submit`: Generate job scripts but don't submit them
 - `--output_dir`: Output directory (default from config)
-- `--wait_time`: Wait time in seconds between job submissions (default: 2)
-- `--verbose`: Enable verbose logging
 
 ## Advanced Command Line Options
 
