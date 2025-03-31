@@ -50,8 +50,10 @@ echo "Processing variable $VARIABLE for year $YEAR"
 if [ "$OVERWRITE" = "overwrite" ]; then
     echo "Forcing overwrite of existing files"
     export ERA5_OVERWRITE="true"
+    OVERWRITE_FLAG="--overwrite"
 else
     export ERA5_OVERWRITE="false"
+    OVERWRITE_FLAG=""
 fi
 
 # Run the Python script
@@ -60,7 +62,7 @@ python process_single_variable.py \
     --variable $VARIABLE \
     --cores $SLURM_CPUS_PER_TASK \
     --memory_limit "85GB" \
-    --overwrite $OVERWRITE
+    $OVERWRITE_FLAG
 # Check the exit status
 if [ $? -eq 0 ]; then
     echo "Processing completed successfully"
