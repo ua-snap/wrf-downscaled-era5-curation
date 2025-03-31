@@ -44,14 +44,10 @@ class Config:
         getenv("GEO_EM_FILE", "/beegfs/CMIP6/wrf_era5/geo_em.d02.nc")
     )
 
-    # Performance optimization mode
-    OPTIMIZATION_MODE: str = getenv("ERA5_OPTIMIZATION_MODE", "io_optimized")
-
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
         self._validate_years()
         self._validate_paths()
-        self._validate_optimization_mode()
         self._create_directories()
 
     def _validate_years(self) -> None:
@@ -70,14 +66,6 @@ class Config:
             self.INPUT_DIR = Path(self.INPUT_DIR)
         if not isinstance(self.OUTPUT_DIR, Path):
             self.OUTPUT_DIR = Path(self.OUTPUT_DIR)
-
-    def _validate_optimization_mode(self) -> None:
-        """Validate optimization mode configuration."""
-        valid_modes = ["balanced", "io_optimized", "compute_optimized", "fully_optimized"]
-        if self.OPTIMIZATION_MODE not in valid_modes:
-            logging.warning(f"Invalid optimization mode: {self.OPTIMIZATION_MODE}")
-            logging.warning(f"Using default: io_optimized")
-            self.OPTIMIZATION_MODE = "io_optimized"
 
     def _create_directories(self) -> None:
         """Create output directories if they don't exist."""
@@ -102,8 +90,6 @@ class Config:
             self.DATA_VARS = [args.variable]
         elif hasattr(args, 'variables') and args.variables is not None:
             self.DATA_VARS = [v.strip() for v in args.variables.split(",") if v.strip()]
-        if hasattr(args, 'optimization_mode') and args.optimization_mode is not None:
-            self.OPTIMIZATION_MODE = args.optimization_mode
         # Log the updated configuration
         logging.debug(f"Updated configuration: {self}")
 

@@ -23,15 +23,16 @@ import numpy as np
 import xarray as xr
 import rioxarray
 from pyproj import CRS, Transformer, Proj
-from dask.distributed import LocalCluster, Client, performance_report
-import dask
-
-# Add recursion limit configuration for Dask to prevent RecursionError
-dask.config.set({"distributed.worker.memory.sizeof.sizeof-recurse-limit": 50})
+from contextlib import nullcontext
 
 from era5_variables import era5_datavar_lut
 from config import config
 from utils.memory import start as start_mem_monitor, stop as stop_mem_monitor
+from utils.dask_utils import (
+    get_dask_client, 
+    configure_dask_memory,
+    get_performance_report_context
+)
 
 
 def setup_logging(verbose: bool = False) -> None:
@@ -132,31 +133,16 @@ def parse_args() -> argparse.Namespace:
         help="Memory limit for Dask workers (default: 16GB)"
     )
     parser.add_argument(
-        "--optimization_mode",
-        type=str,
-        choices=["balanced", "io_optimized", "compute_optimized", "fully_optimized"],
-        default="io_optimized",
-        help="Optimization mode for Dask worker configuration (default: io_optimized)"
-    )
-    parser.add_argument(
         "--generate_report",
         action="store_true",
         help="Generate a Dask performance report"
     )
-    parser.add_argument(
-        "--verbose",
-        action="store_true",
-        help="Enable verbose logging"
-    )
-
-    # Memory monitoring options
     parser.add_argument(
         "--recurse_limit",
         type=int,
         default=50,
         help="Recursion limit for Dask sizeof function (default: 50)"
     )
-    
     args = parser.parse_args()
     
     # Validate the variable
@@ -244,159 +230,6 @@ def is_3d_variable(variable: str) -> bool:
         "dbz", "twb", "rh", "temp", "height", "CLDFRA", "QVAPOR", "u", "v", "w",
         "SMOIS", "SH2O", "TSLB"
     ]
-
-
-def calculate_worker_config(cores: int, task_type: str = "balanced") -> Tuple[int, int]:
-    """Calculate optimal worker count and threads per worker based on core count and task type.
-    
-    Provides different configurations based on the type of processing task:
-    - "io_bound": More workers with fewer threads, optimal for file operations
-    - "compute_bound": Fewer workers with more threads, better for CPU-intensive tasks
-    - "balanced": Balanced approach using sqrt formula (default)
-    
-    Args:
-        cores: Number of available CPU cores
-        task_type: Type of task being performed ("io_bound", "compute_bound", or "balanced")
-        
-    Returns:
-        Tuple of (worker_count, threads_per_worker)
-    """
-    import math
-    
-    if task_type == "io_bound":
-        # More workers with fewer threads for I/O operations
-        worker_count = min(cores, 12)  # Up to 12 workers, but no more than cores
-        threads_per_worker = max(1, cores // worker_count)
-    elif task_type == "compute_bound":
-        # Fewer workers with more threads for computation
-        worker_count = max(4, cores // 4)  # At least 4 workers
-        threads_per_worker = max(2, cores // worker_count)
-    else:  # balanced
-        # Square root approach for balanced workloads (default behavior)
-        worker_count = max(2, min(8, round(math.sqrt(cores))))
-        threads_per_worker = max(1, cores // worker_count)
-    
-    # Ensure total threads don't exceed core count
-    total_threads = worker_count * threads_per_worker
-    if total_threads > cores:
-        # Adjust threads per worker down if needed
-        threads_per_worker = max(1, cores // worker_count)
-    
-    return worker_count, threads_per_worker
-
-
-def calculate_worker_memory(total_memory_gb: float, n_workers: int, task_type: str = "balanced") -> str:
-    """Calculate appropriate memory per worker based on available memory and task type.
-    
-    Args:
-        total_memory_gb: Total memory available in GB
-        n_workers: Number of workers being created
-        task_type: Type of task being performed
-        
-    Returns:
-        Memory limit per worker as a string (e.g., "4GB")
-    """
-    # Minimum reasonable memory per worker
-    min_memory_per_worker_gb = 2  # 2GB minimum
-    
-    # Calculate memory based on task type
-    if task_type == "io_bound":
-        # I/O tasks typically need less memory
-        worker_fraction = 0.7  # Use 70% of available memory
-        memory_factor = 0.8    # Each worker gets less memory
-    elif task_type == "compute_bound":
-        # Compute tasks may need more memory
-        worker_fraction = 0.8  # Use 80% of available memory
-        memory_factor = 1.2    # Each worker gets more memory
-    else:  # balanced
-        worker_fraction = 0.75  # Use 75% of available memory
-        memory_factor = 1.0    # Standard memory allocation
-    
-    # Calculate memory per worker with task-specific adjustments
-    safe_total_gb = total_memory_gb * worker_fraction
-    base_worker_memory_gb = safe_total_gb / n_workers
-    adjusted_worker_memory_gb = base_worker_memory_gb * memory_factor
-    
-    # Ensure we meet minimum memory requirements
-    worker_memory_gb = max(min_memory_per_worker_gb, adjusted_worker_memory_gb)
-    
-    # Return formatted memory string
-    return f"{int(worker_memory_gb)}GB"
-
-
-def get_dask_client(cores: Optional[int] = None, 
-                   memory_limit: str = "16GB", 
-                   task_type: str = "balanced") -> Tuple[Client, LocalCluster]:
-    """Set up a Dask LocalCluster and Client optimized for specific task types.
-    
-    Automatically determines optimal worker count, threads per worker, and
-    memory allocation based on available resources and the type of task:
-    - "io_bound": Optimized for I/O operations (more workers, less memory per worker)
-    - "compute_bound": Optimized for computation (fewer workers, more threads and memory)
-    - "balanced": Balanced configuration for mixed workloads
-    
-    Args:
-        cores: Number of cores to use (None for auto-detect)
-        memory_limit: Total memory limit across all workers
-        task_type: Type of task being performed
-    
-    Returns:
-        Tuple of (Client, LocalCluster)
-    """
-    # For SLURM jobs, use the allocated resources
-    if "SLURM_JOB_ID" in os.environ:
-        # If SLURM_CPUS_PER_TASK is set, use that for the number of cores
-        if "SLURM_CPUS_PER_TASK" in os.environ:
-            slurm_cores = int(os.environ["SLURM_CPUS_PER_TASK"])
-            cores = slurm_cores if cores is None else min(cores, slurm_cores)
-            logging.info(f"Using {cores} cores from SLURM allocation")
-        
-        # Check for memory allocation in SLURM
-        if "SLURM_MEM_PER_NODE" in os.environ:
-            slurm_mem_mb = int(os.environ["SLURM_MEM_PER_NODE"])
-            slurm_mem_gb = slurm_mem_mb / 1024
-            logging.info(f"SLURM memory allocation: {slurm_mem_gb:.1f}GB")
-    
-    # If cores is still None, use CPU count
-    if cores is None:
-        cores = os.cpu_count()
-    
-    # Calculate worker configuration based on task type
-    n_workers, threads_per_worker = calculate_worker_config(cores, task_type)
-    
-    # Calculate total memory available (from memory_limit string)
-    if isinstance(memory_limit, str):
-        # Parse memory string like "16GB"
-        import re
-        memory_value = float(re.match(r'(\d+(\.\d+)?)', memory_limit).group(1))
-        if "MB" in memory_limit:
-            memory_gb = memory_value / 1024
-        elif "GB" in memory_limit:
-            memory_gb = memory_value
-        else:
-            # Default to bytes, convert to GB
-            memory_gb = float(memory_limit) / (1024 * 1024 * 1024)
-    else:
-        memory_gb = float(memory_limit) / (1024 * 1024 * 1024)
-    
-    # Calculate memory per worker
-    memory_per_worker = calculate_worker_memory(memory_gb, n_workers, task_type)
-    
-    # Set up a local cluster with appropriate resources
-    cluster = LocalCluster(
-        n_workers=n_workers,
-        threads_per_worker=threads_per_worker,
-        memory_limit=memory_per_worker
-    )
-    
-    logging.info(f"Created Dask LocalCluster [{task_type} mode] with {n_workers} workers, "
-                 f"{threads_per_worker} threads per worker, and {memory_per_worker} memory per worker")
-    
-    # Create a client
-    client = Client(cluster)
-    logging.info(f"Dask dashboard available at: {client.dashboard_link}")
-    
-    return client, cluster
 
 
 def get_variable_chunks(variable: str) -> Dict[str, Union[str, int]]:
@@ -623,7 +456,6 @@ def process_variable_for_year(
     generate_report: bool = False,
     cores: Optional[int] = None,
     memory_limit: str = "16GB",
-    optimization_mode: str = "io_optimized",
     overwrite: bool = False
 ) -> None:
     """Process a single variable for a single year.
@@ -644,26 +476,8 @@ def process_variable_for_year(
         generate_report: Whether to generate a Dask performance report
         cores: Number of cores to use (default: auto-detect)
         memory_limit: Memory limit for Dask workers
-        optimization_mode: Optimization mode ("balanced", "io_optimized", or "compute_optimized")
         overwrite: Whether to overwrite existing output files
     """
-    # Map optimization mode to task types for different processing phases
-    task_types = {
-        "balanced": {"io": "balanced", "compute": "balanced"},
-        "io_optimized": {"io": "io_bound", "compute": "balanced"},
-        "compute_optimized": {"io": "balanced", "compute": "compute_bound"},
-        "fully_optimized": {"io": "io_bound", "compute": "compute_bound"}
-    }
-    
-    # Use balanced mode as default if unknown optimization mode provided
-    if optimization_mode not in task_types:
-        logging.warning(f"Unknown optimization mode: {optimization_mode}, using 'balanced'")
-        optimization_mode = "balanced"
-    
-    # Get task types for this optimization mode
-    io_task_type = task_types[optimization_mode]["io"]
-    compute_task_type = task_types[optimization_mode]["compute"]
-    
     # Check if output already exists
     exists, output_file = check_output_exists(output_dir, variable, year)
     if exists and not overwrite and not generate_report:
@@ -674,30 +488,19 @@ def process_variable_for_year(
     io_client = io_cluster = compute_client = compute_cluster = None
     
     try:
-        # Configure additional Dask settings to prevent memory issues
-        dask.config.set({
-            "distributed.worker.memory.spill": 0.85,  # Spill to disk at 85% memory
-            "distributed.worker.memory.target": 0.75,  # Target 75% memory usage
-            "distributed.worker.memory.pause": 0.95,   # Pause execution at 95% memory
-            "distributed.worker.memory.terminate": 0.98  # Terminate at 98% memory
-        })
+        # Configure Dask memory settings
+        configure_dask_memory()
         
         # Set up performance report context
-        try:
-            perf_file = str(Path.home() / f"{variable}_{year}_performance.html")
-            context = performance_report(filename=perf_file) if generate_report else nullcontext()
-        except Exception as e:
-            logging.warning(f"Could not access home directory for performance report: {e}")
-            logging.warning("Falling back to current directory for performance report")
-            context = performance_report(filename=f"{variable}_{year}_performance.html") if generate_report else nullcontext()
+        context = get_performance_report_context(variable, year, generate_report)
         
         with context:
             # Get optimal chunk sizes for this variable
             chunks = get_variable_chunks(variable)
             
             # ===== I/O PHASE =====
-            logging.info(f"Starting I/O phase with {io_task_type} configuration")
-            io_client, io_cluster = get_dask_client(cores, memory_limit, io_task_type)
+            logging.info("Starting I/O phase with io_bound configuration")
+            io_client, io_cluster = get_dask_client(cores, memory_limit, "io_bound")
             
             # Get grid information
             logging.info(f"Retrieving grid information from {geo_file}")
@@ -721,8 +524,8 @@ def process_variable_for_year(
             io_cluster.close()
             
             # ===== COMPUTATION PHASE =====
-            logging.info(f"Starting computation phase with {compute_task_type} configuration")
-            compute_client, compute_cluster = get_dask_client(cores, memory_limit, compute_task_type)
+            logging.info("Starting computation phase with balanced configuration")
+            compute_client, compute_cluster = get_dask_client(cores, memory_limit, "balanced")
             
             # Regrid to EPSG:3338 - computation intensive
             logging.info(f"Reprojecting data to EPSG:3338")
@@ -787,10 +590,6 @@ def process_variable_for_year(
         logging.info(f"Closed all Dask clients and clusters")
 
 
-# Add nullcontext for use in performance report
-from contextlib import nullcontext
-
-
 def main() -> None:
     """Main processing function."""
     # Parse and validate arguments
@@ -800,6 +599,7 @@ def main() -> None:
     # Update recursion limit if specified
     if args.recurse_limit != 50:
         logging.info(f"Setting Dask recursion limit to {args.recurse_limit}")
+        from utils.dask_utils import dask
         dask.config.set({"distributed.worker.memory.sizeof.sizeof-recurse-limit": args.recurse_limit})
     
     start_mem_monitor()
@@ -821,7 +621,6 @@ def main() -> None:
             generate_report=args.generate_report,
             cores=args.cores,
             memory_limit=args.memory_limit,
-            optimization_mode=args.optimization_mode,
             overwrite=args.overwrite
         )
         

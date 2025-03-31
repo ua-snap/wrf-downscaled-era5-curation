@@ -34,33 +34,15 @@ sbatch process_era5_variable.sbatch <year> <variable>
 # Example
 sbatch process_era5_variable.sbatch 1980 t2_mean
 
-# With optimization mode specified
-sbatch process_era5_variable.sbatch 1980 t2_mean io_optimized
-
 # Force overwrite of existing files, handy for testing
-sbatch process_era5_variable.sbatch 1980 t2_mean io_optimized overwrite
+sbatch process_era5_variable.sbatch 1980 t2_mean overwrite
 ```
 
 The SLURM script accepts up to four parameters:
 1. `year`: Year to process (required)
 2. `variable`: Variable to process (required)
-3. `optimization_mode`: Optimization mode (optional, defaults to `io_optimized`)
-4. `overwrite`: Set to `overwrite` to force reprocessing of existing files (optional)
+3. `overwrite`: Set to `overwrite` to force reprocessing of existing files (optional)
 
-### Optimization Modes
-
-The processing script supports different optimization modes for various workloads:
-
-- `io_optimized` (default): Optimizes for I/O operations with more workers and less memory per worker
-- `compute_optimized`: Optimizes for computation with fewer workers and more threads per worker
-- `balanced`: Uses a balanced approach for mixed workloads
-- `fully_optimized`: Uses I/O optimization for file operations and compute optimization for computational tasks
-
-To specify a different optimization mode when running the Python script directly:
-
-```bash
-python process_single_variable.py --year 1980 --variable t2_mean --optimization_mode compute_optimized
-```
 
 ## Processing Multiple Variables and Years
 
@@ -85,7 +67,6 @@ python submit_era5_jobs.py --variable t2_mean --start_year 1980 --end_year 1985 
 The job submission script provides several options for controlling job submission:
 
 - `--max_concurrent`: Maximum number of concurrent jobs (default: 20)
-- `--optimization_mode`: Optimization mode for worker configuration (choices: balanced, io_optimized, compute_optimized, fully_optimized; default: io_optimized)
 - `--output_dir`: Output directory (default from config)
 
 ## Advanced Command Line Options
@@ -104,7 +85,6 @@ The `process_single_variable.py` script provides additional options for fine-tun
 
 - `--cores`: Number of cores to use (default: auto-detect)
 - `--memory_limit`: Memory limit for Dask workers (default: 16GB)
-- `--optimization_mode`: Optimization mode (default: io_optimized)
 - `--generate_report`: Generate a Dask performance report (saves to `~/<variable>_<year>_performance.html`)
 
 Example with advanced options:
@@ -115,7 +95,6 @@ python process_single_variable.py \
     --variable t2_mean \
     --cores 24 \
     --memory_limit "85GB" \
-    --optimization_mode "compute_optimized" \
     --recurse_limit 100 \
     --generate_report
 ```
@@ -132,21 +111,13 @@ Many default values come from `config.py`, which reads from environment variable
 - `ERA5_INPUT_PATTERN`: File pattern for input files (default: "era5_wrf_dscale_4km_{date}.nc")
 - `ERA5_OUTPUT_TEMPLATE`: Template for output files (default: "era5_wrf_dscale_4km_{datavar}_{year}_3338.nc")
 - `GEO_EM_FILE`: Path to WRF geo_em file (default: "/beegfs/CMIP6/wrf_era5/geo_em.d02.nc")
-- `ERA5_OPTIMIZATION_MODE`: Default optimization mode (default: "io_optimized")
-- `ERA5_OVERWRITE`: Whether to overwrite existing files (default: False)
 
 ## Monitoring Progress
 
 To check the status of your jobs:
 
 ```bash
-squeue -u $USER
-```
-
-To cancel all your jobs:
-
-```bash
-scancel -u $USER
+watch squeue --me
 ```
 
 ## Understanding the Output
