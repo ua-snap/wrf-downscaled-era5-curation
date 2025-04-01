@@ -157,8 +157,8 @@ def check_output_exists(output_dir: Path, variable: str, year: int) -> Tuple[boo
     var_dir = output_dir.joinpath(variable)
     var_dir.mkdir(exist_ok=True, parents=True)
     
-    # Output filename: variable_year_era5_4km_3338.nc
-    output_file = var_dir.joinpath(f"{variable}_{year}_era5_4km_3338.nc")
+    # Output filename: variable_year_daily_era5_4km_3338.nc
+    output_file = var_dir.joinpath(f"{variable}_{year}_daily_era5_4km_3338.nc")
     
     exists = output_file.exists()
     if exists:
@@ -372,11 +372,11 @@ def regrid_to_3338(ds: xr.Dataset, grid_info: Dict[str, Any]) -> xr.Dataset:
 
     ds_3338 = ds_proj.rio.reproject("EPSG:3338")
 
-
+    
     return ds_3338
 
 
-def write_output(ds: xr.Dataset, output_file: Path) -> None:
+def write_output(ds: xr.Dataset, variable: str, output_file: Path) -> None:
     """Write output to NetCDF file.
     
     Args:
@@ -392,7 +392,9 @@ def write_output(ds: xr.Dataset, output_file: Path) -> None:
     ds.attrs["projection"] = "EPSG:3338 (Alaska Albers)"
     ds.attrs["institution"] = "Alaska Climate Adaptation Science Center"
     ds.attrs["credit"] = "Chris Waigl"
-    
+    ds.attrs["variable"] = variable
+    ds.attrs["description"] = era5_datavar_lut[variable]["description"]
+
     # Write to NetCDF file
     logger.info(f"Writing output to {output_file}")
     ds.to_netcdf(
@@ -488,7 +490,7 @@ def process_variable_for_year(
         del processed_ds
         compute_client.run(lambda: gc.collect())  # Trigger garbage collection on workers
         
-        write_output(reprojected_ds, output_file)
+        write_output(reprojected_ds, variable, output_file)
         
         # Clean up final data
         del reprojected_ds

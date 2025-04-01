@@ -26,17 +26,14 @@ class Config:
     )
 
     # Time range settings
-    START_YEAR: int = int(getenv("ERA5_START_YEAR", "1980"))
-    END_YEAR: int = int(getenv("ERA5_END_YEAR", "1990"))
+    START_YEAR: int = int(getenv("ERA5_START_YEAR", "1960"))
+    END_YEAR: int = int(getenv("ERA5_END_YEAR", "2020"))
 
     DATA_VARS: List[str] = field(default_factory=lambda: _get_data_vars())
 
     # File patterns and naming
     INPUT_FILE_PATTERN: str = getenv(
         "ERA5_INPUT_PATTERN", "era5_wrf_dscale_4km_{date}.nc"
-    )
-    OUTPUT_FILE_TEMPLATE: str = getenv(
-        "ERA5_OUTPUT_TEMPLATE", "era5_wrf_dscale_4km_{datavar}_{year}_3338.nc"
     )
 
     # Source for WRF geo_em file

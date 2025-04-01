@@ -23,11 +23,11 @@ import subprocess
 import sys
 import time
 from pathlib import Path
-from typing import List, Tuple, Dict
+from typing import List, Dict
 
 from era5_variables import era5_datavar_lut, list_all_variables
 from config import config
-from utils.logging import configure_logging, get_logger, get_log_file_path, create_log_directory, setup_variable_logging
+from utils.logging import get_logger, create_log_directory, setup_variable_logging
 
 # Get a named logger for this module
 logger = get_logger(__name__)
@@ -161,7 +161,7 @@ def submit_individual_jobs(
         Dictionary mapping variables to lists of job IDs
     """
     job_ids = {}
-    wait_time = 2  # Hardcoded value
+    wait_time = 2  # hardcoded value, used to not overwhelm the scheduler
     
     # Count total jobs
     total_jobs = len(variables) * (end_year - start_year + 1)
@@ -175,8 +175,7 @@ def submit_individual_jobs(
         log_dir = create_job_log_directory(variable)
         
         for year in range(start_year, end_year + 1):
-            # Submit the job
-            # Check if we need to wait for jobs to complete
+            # Submit job but check if we need to wait for jobs to complete
             while True:
                 # Get number of running and pending jobs
                 try:

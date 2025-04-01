@@ -53,18 +53,18 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
     },
     "t2_mean": {
         "var_id": "T2",
-        "agg_func": lambda x: x.mean(dim="Time"),
-        "description": "Daily mean temperature at 2 meters (K)",
+        "agg_func": lambda x: x.mean(dim="Time") - 273.15,
+        "description": "Daily mean temperature at 2 meters (C)",
     },
     "t2_min": {
         "var_id": "T2",
-        "agg_func": lambda x: x.min(dim="Time"),
-        "description": "Daily minimum temperature at 2 meters (K)",
+        "agg_func": lambda x: x.min(dim="Time") - 273.15,
+        "description": "Daily minimum temperature at 2 meters (C)",
     },
     "t2_max": {
         "var_id": "T2",
-        "agg_func": lambda x: x.max(dim="Time"),
-        "description": "Daily maximum temperature at 2 meters (K)",
+        "agg_func": lambda x: x.max(dim="Time") - 273.15,
+        "description": "Daily maximum temperature at 2 meters (C)",
     },
     "q2_mean": {
         "var_id": "Q2",

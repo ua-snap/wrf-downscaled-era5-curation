@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=96G
-#SBATCH --time=2:00:00
+#SBATCH --time=1:00:00
 #SBATCH --partition=t2small
 #SBATCH --output=logs/era5_process/%x_%j.out
 
@@ -20,13 +20,9 @@ echo "Running on $(hostname)"
 source $HOME/miniconda3/etc/profile.d/conda.sh
 conda activate snap-geo
 
-# Install psutil if it's not already available
-if ! python -c "import psutil" &> /dev/null; then
-    echo "Installing psutil for memory monitoring"
-    pip install psutil
-fi
 
-# Set OpenMP threads
+# Set OpenMP threads, not sure if this is useful
+# Consider the status to be "superstition" at this point
 export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 
 # Get command line arguments

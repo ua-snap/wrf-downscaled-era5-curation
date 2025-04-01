@@ -1,17 +1,14 @@
 # ERA5 Processing Pipeline
 
-This is the current, simplified approach to processing ERA5 downscaled data. This approach uses Dask for parallel processing within nodes but processes one variable and one year at a time using SLURM for job management.
+This pipeline is for processing the ERA5 4 km WRF-downscaled data. The pipeline is intended to resample the input data source from hourly to daily resolution, and put it on the EPSG:3338 grid. This approach uses Dask for parallel processing within individual compute nodes, but processes one variable and one year at a time using SLURM for job management.
 
 ## Overview
 
-The simplified approach consists of:
+After some experimentation the code is settling on a simplified approach consisting of:
 
-1. A main processing script (`process_single_variable.py`) that processes one variable for one year
+1. A main processing worker script (`process_single_variable.py`) that processes one variable for one year
 2. A job submission script (`submit_era5_jobs.py`) that generates and submits SLURM jobs
 3. A template SBATCH script (`process_era5_variable.sbatch`) for individual job submissions
-
-This approach is designed to be simpler and more reliable than the distributed Dask approach, with clearer error handling and easier debugging.
-
 
 ## Project Structure
 
@@ -25,7 +22,7 @@ The main components of the pipeline are:
 
 ## Processing a Single Variable for a Single Year
 
-To process a single variable for a single year manually:
+This isn't really a recommended entry point for the pipeline, but it can be useful for rapid testing and isolating the .sbatch and worker script behavior from the job submission script. To process a single variable for a single year manually:
 
 ```bash
 # Basic usage
@@ -41,7 +38,7 @@ sbatch process_era5_variable.sbatch 1980 t2_mean overwrite
 The SLURM script accepts up to three parameters:
 1. `year`: Year to process (required)
 2. `variable`: Variable to process (required)
-3. `overwrite`: Set to `overwrite` to force reprocessing of existing files (optional)
+3. `overwrite`: Just include `overwrite` to force reprocessing of existing files (optional)
 
 
 ## Processing Multiple Variables and Years
@@ -53,9 +50,9 @@ To process multiple variables and years, use the `submit_era5_jobs.py` script:
 python submit_era5_jobs.py --variable t2_mean --start_year 1980 --end_year 1985
 
 # Process multiple variables for a range of years
-python submit_era5_jobs.py --variables t2_mean,t2_min,t2_max --start_year 1990 --end_year 2000
+python submit_era5_jobs.py --variables t2_mean,t2_min,t2_max,rh2_mean --start_year 1990 --end_year 2000
 
-# Process all available variables for a single year
+# NOT WORKING YET Process all available variables for a single year NOT WORKING YET
 python submit_era5_jobs.py --all_variables --start_year 2000 --end_year 2000
 ```
 
@@ -63,7 +60,7 @@ python submit_era5_jobs.py --all_variables --start_year 2000 --end_year 2000
 
 The job submission script provides several options for controlling job submission:
 
-- `--max_concurrent`: Maximum number of concurrent jobs (default: 20)
+- `--max_concurrent`: Maximum number of concurrent jobs (default: 20). Nothing wrong with going 30+ here.
 - `--output_dir`: Output directory (default from config)
 
 ## Advanced Command Line Options
@@ -83,7 +80,7 @@ The `process_single_variable.py` script provides additional options for fine-tun
 - `--cores`: Number of cores to use (default: auto-detect)
 - `--memory_limit`: Memory limit for Dask workers (default: 16GB)
 
-Example with advanced options:
+Example with advanced options - again, not really the recommended "production" entry point to this pipeline, but useful for testing and isolating the core logic from the orchestration:
 
 ```bash
 python process_single_variable.py \
@@ -99,20 +96,28 @@ Many default values come from `config.py`, which reads from environment variable
 
 - `ERA5_INPUT_DIR`: Input directory (default: "/beegfs/CMIP6/wrf_era5/04km")
 - `ERA5_OUTPUT_DIR`: Output directory (default: "/beegfs/CMIP6/cparr4/daily_downscaled_era5_for_rasdaman")
-- `ERA5_START_YEAR`: Default start year (default: 1980)
-- `ERA5_END_YEAR`: Default end year (default: 1990)
-- `ERA5_DATA_VARS`: Comma-separated list of variables to process
+- `ERA5_START_YEAR`: Default start year (default: 1960)
+- `ERA5_END_YEAR`: Default end year (default: 2020)
+- `ERA5_DATA_VARS`: Comma-separated list of variables to process (default: t2 min/mean/max trio)
 - `ERA5_INPUT_PATTERN`: File pattern for input files (default: "era5_wrf_dscale_4km_{date}.nc")
-- `ERA5_OUTPUT_TEMPLATE`: Template for output files (default: "era5_wrf_dscale_4km_{datavar}_{year}_3338.nc")
 - `GEO_EM_FILE`: Path to WRF geo_em file (default: "/beegfs/CMIP6/wrf_era5/geo_em.d02.nc")
 
 ## Monitoring Progress
+A bunch of log files will get written to the working directory, categorized by variable. The logging here isn't ultra-tidy because there is overlap between the python log files (`*.log`) and the SLURM log files (`*.out`).
 
-To check the status of your jobs:
+To check the status of your job submissions:
 
 ```bash
 watch squeue --me
 ```
+
+To tail the logs:
+
+```bash
+tail -f logs/variable_id/*.out
+```
+
+The link to the client dashboard is written to the log - but I actually don't reccommend forwarding/using the dashboard to monitor progress at this point because the pipeline executes rapidly enough that it isn't very useful.
 
 ## Understanding the Output
 
@@ -121,10 +126,10 @@ The processed data will be saved in the specified output directory (default: fro
 ```
 <output_dir>/
   <variable1>/
-    <variable1>_<year>_era5_4km_3338.nc
+    <variable1>_<year>_daily_era5_4km_3338.nc
     ...
   <variable2>/
-    <variable2>_<year>_era5_4km_3338.nc
+    <variable2>_<year>_daily_era5_4km_3338.nc
     ...
   ...
 ```
@@ -149,15 +154,11 @@ To customize the processing:
 
 The input file pattern uses the `{date}` placeholder which is automatically expanded to include wildcards when searching for files. For example, with the default pattern `era5_wrf_dscale_4km_{date}.nc` and a specific year (e.g., 1980), the script looks for files matching `era5_wrf_dscale_4km_1980-*.nc` in the year's directory.
 
-## Memory Management and Optimization
-
-The pipeline includes several features for managing memory and optimizing performance:
-
 ### Memory Monitoring
 
-Memory monitoring is now always enabled and logs memory usage every 5 seconds. This provides continuous visibility into memory usage throughout the processing pipeline, which can help identify memory bottlenecks without requiring any additional configuration.
+Memory monitoring logs memory usage every 5 seconds. This provides continuous visibility into memory usage throughout the processing pipeline, which can help identify memory bottlenecks without requiring any additional configuration.
 
-## Troubleshooting
+### Troubleshooting
 
 Common issues and solutions:
 
@@ -168,5 +169,3 @@ Common issues and solutions:
 - **Missing variable**: Check that the variable name is correct and exists in `era5_variables.py`
 - **RecursionError**: Increase the recursion limit in the `dask_utils` parameter module
 - **OOM killed by SLURM**: Increase memory allocation in sbatch script or reduce chunk sizes
-
-Memory monitoring logs can help identify where memory usage spikes. 
