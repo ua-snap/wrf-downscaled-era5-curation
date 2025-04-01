@@ -82,7 +82,6 @@ The `process_single_variable.py` script provides additional options for fine-tun
 
 - `--cores`: Number of cores to use (default: auto-detect)
 - `--memory_limit`: Memory limit for Dask workers (default: 16GB)
-- `--generate_report`: Generate a Dask performance report (saves to `~/<variable>_<year>_performance.html`)
 
 Example with advanced options:
 
@@ -91,8 +90,7 @@ python process_single_variable.py \
     --year 1980 \
     --variable t2_mean \
     --cores 24 \
-    --memory_limit "85GB" \
-    --generate_report
+    --memory_limit "85GB"
 ```
 
 ## Configuration and Environment Variables
@@ -159,24 +157,6 @@ The pipeline includes several features for managing memory and optimizing perfor
 
 Memory monitoring is now always enabled and logs memory usage every 5 seconds. This provides continuous visibility into memory usage throughout the processing pipeline, which can help identify memory bottlenecks without requiring any additional configuration.
 
-### Handling Recursion Errors
-
-For complex data structures, you may encounter recursion errors in Dask. Increase the recursion limit:
-
-```bash
-python process_single_variable.py --year 1980 --variable t2_mean --recurse_limit 100
-```
-
-### Performance Reporting
-
-Generate Dask performance reports to analyze bottlenecks:
-
-```bash
-python process_single_variable.py --year 1980 --variable t2_mean --generate_report
-```
-
-This creates an HTML report in your home directory: `~/<variable>_<year>_performance.html`
-
 ## Troubleshooting
 
 Common issues and solutions:
@@ -186,7 +166,7 @@ Common issues and solutions:
 - **Job times out**: Increase the time limit in the sbatch script
 - **Too many jobs in queue**: Decrease the `--max_concurrent` parameter
 - **Missing variable**: Check that the variable name is correct and exists in `era5_variables.py`
-- **RecursionError**: Increase the `--recurse_limit` parameter (default: 50)
+- **RecursionError**: Increase the recursion limit in the `dask_utils` parameter module
 - **OOM killed by SLURM**: Increase memory allocation in sbatch script or reduce chunk sizes
 
-For more detailed diagnostic information, check the Dask performance reports that are generated when using the `--generate_report` flag. Memory monitoring logs can also help identify where memory usage spikes. 
+Memory monitoring logs can help identify where memory usage spikes. 

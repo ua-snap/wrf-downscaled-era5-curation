@@ -9,9 +9,9 @@
 #SBATCH --output=logs/era5_process/%x_%j.out
 
 # Usage:
-# sbatch process_era5_variable.sbatch <year> <variable> [optimization_mode] [overwrite]
+# sbatch process_era5_variable.sbatch <year> <variable> [overwrite]
 # Example:
-# sbatch process_era5_variable.sbatch 1980 t2_mean io_optimized
+# sbatch process_era5_variable.sbatch 1980 t2_mean
 
 echo "Starting at $(date)"
 echo "Running on $(hostname)"
@@ -49,10 +49,8 @@ echo "Processing variable $VARIABLE for year $YEAR"
 # Set overwrite environment variable if requested
 if [ "$OVERWRITE" = "overwrite" ]; then
     echo "Forcing overwrite of existing files"
-    export ERA5_OVERWRITE="true"
     OVERWRITE_FLAG="--overwrite"
 else
-    export ERA5_OVERWRITE="false"
     OVERWRITE_FLAG=""
 fi
 

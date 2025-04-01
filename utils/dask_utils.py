@@ -9,10 +9,9 @@ memory allocation, and client creation.
 import os
 import re
 import math
-from typing import Tuple, Optional, Any
-from contextlib import nullcontext
+from typing import Tuple, Optional
 
-from dask.distributed import LocalCluster, Client, performance_report
+from dask.distributed import LocalCluster, Client
 import dask
 from utils.logging import get_logger
 
@@ -183,28 +182,4 @@ def configure_dask_memory() -> None:
         "distributed.worker.memory.terminate": 0.98,  # Terminate at 98% memory
         "distributed.worker.memory.sizeof.sizeof-recurse-limit": 100 #recursion limit to prevent RecursionError
     }) 
-    logger.info("Configured Dask memory management settings")
-
-
-def get_performance_report_context(variable: str, year: int, generate_report: bool = False) -> Any:
-    """Get a performance report context manager for Dask operations.
-    
-    Args:
-        variable: Variable name for the report filename
-        year: Year for the report filename
-        generate_report: Whether to generate a report
-        
-    Returns:
-        A context manager (either performance_report or nullcontext)
-    """
-    if not generate_report:
-        return nullcontext()
-        
-    try:
-        from pathlib import Path
-        perf_file = str(Path.home() / f"{variable}_{year}_performance.html")
-        return performance_report(filename=perf_file)
-    except Exception as e:
-        logger.warning(f"Could not access home directory for performance report: {e}")
-        logger.warning("Falling back to current directory for performance report")
-        return performance_report(filename=f"{variable}_{year}_performance.html") 
+    logger.info("Configured Dask memory management settings") 

@@ -21,17 +21,16 @@ import numpy as np
 import xarray as xr
 import rioxarray
 from pyproj import CRS, Transformer, Proj
-from contextlib import nullcontext
+
 
 from era5_variables import era5_datavar_lut
 from config import config
 from utils.memory import start as start_mem_monitor, stop as stop_mem_monitor
 from utils.dask_utils import (
     get_dask_client, 
-    configure_dask_memory,
-    get_performance_report_context
+    configure_dask_memory
 )
-from utils.logging import configure_logging, get_logger, get_log_file_path, setup_variable_logging
+from utils.logging import get_logger, setup_variable_logging
 
 # Get a named logger for this module
 logger = get_logger(__name__)
@@ -101,11 +100,6 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="16GB",
         help="Memory limit for Dask workers (default: 16GB)"
-    )
-    parser.add_argument(
-        "--generate_report",
-        action="store_true",
-        help="Generate a Dask performance report"
     )
     args = parser.parse_args()
     
@@ -417,19 +411,16 @@ def process_variable_for_year(
     filepaths: List[Path],
     geo_file: Path,
     output_dir: Path,
-    generate_report: bool = False,
     cores: Optional[int] = None,
     memory_limit: str = "16GB",
     overwrite: bool = False
-) -> None:
+) -> Optional[Path]:
     """Process a single variable for a single year.
     
     This function processes one ERA5 variable for one year, using Dask for
     parallelization within a single compute node. It reads the hourly ERA5 data,
     applies the appropriate aggregation function, regrids to EPSG:3338, and writes
-    the output to a NetCDF file. If generate_report is True, a Dask performance
-    report is written to the user's home directory (~/{variable}_{year}_performance.html).
-    If the home directory is not accessible, the report is written to the current directory.
+    the output to a NetCDF file.
     
     Args:
         variable: Variable to process
@@ -437,16 +428,18 @@ def process_variable_for_year(
         filepaths: List of input file paths
         geo_file: Path to WRF geo_em file for projection information
         output_dir: Directory for output files
-        generate_report: Whether to generate a Dask performance report
         cores: Number of cores to use (default: auto-detect)
         memory_limit: Memory limit for Dask workers
         overwrite: Whether to overwrite existing output files
+    
+    Returns:
+        Path to the output file if successful, None otherwise
     """
     # Check if output already exists
     exists, output_file = check_output_exists(output_dir, variable, year)
-    if exists and not overwrite and not generate_report:
+    if exists and not overwrite:
         logger.info(f"Output file {output_file} already exists, skipping (overwrite=False)")
-        return
+        return None
     
     # Initialize client variables outside try block
     io_client = io_cluster = compute_client = compute_cluster = None
@@ -455,57 +448,51 @@ def process_variable_for_year(
         # Configure Dask memory settings
         configure_dask_memory()
         
-        # Set up performance report context
-        context = get_performance_report_context(variable, year, generate_report)
+        # Get optimal chunk sizes for this variable
+        chunks = get_variable_chunks(variable)
         
-        with context:
-            # Get optimal chunk sizes for this variable
-            chunks = get_variable_chunks(variable)
-            
-            # ===== I/O PHASE =====
-            logger.info("Starting I/O phase with io_bound configuration")
-            io_client, io_cluster = get_dask_client(cores, memory_limit, "io_bound")
-            
-            # Get grid information
-            logger.info(f"Retrieving grid information from {geo_file}")
-            grid_info = get_grid_info(filepaths[0], geo_file)
-            
-            # Read input data
-            logger.info(f"Reading data for {variable} from {len(filepaths)} files")
-            ds = read_data(filepaths, variable, chunks)
-            
-            # Process the variable - this is mostly I/O and simple aggregation
-            logger.info(f"Processing variable {variable}")
-            processed_ds = process_variable(ds, variable)
-            
-            # Clean up intermediate data to free memory
-            del ds
-            io_client.run(lambda: gc.collect())  # Trigger garbage collection on workers
-            
-            # Close I/O client
-            logger.info("Closing I/O phase Dask client")
-            io_client.close()
-            io_cluster.close()
-            
-            # ===== COMPUTATION PHASE =====
-            logger.info("Starting computation phase with balanced configuration")
-            compute_client, compute_cluster = get_dask_client(cores, memory_limit, "balanced")
-            
-            # Regrid to EPSG:3338 - computation intensive
-            logger.info(f"Reprojecting data to EPSG:3338")
-            reprojected_ds = regrid_to_3338(processed_ds, grid_info)
-            
-            # Clean up intermediate data to free memory
-            del processed_ds
-            compute_client.run(lambda: gc.collect())  # Trigger garbage collection on workers
-            
-            # Write output
-            logger.info(f"Writing output to {output_file}")
-            write_output(reprojected_ds, output_file)
-            
-            # Clean up final data
-            del reprojected_ds
-            compute_client.run(lambda: gc.collect())  # Trigger garbage collection on workers
+        # ===== I/O PHASE =====
+        logger.info("Starting I/O phase with io_bound configuration")
+        io_client, io_cluster = get_dask_client(cores, memory_limit, "io_bound")
+        
+        # Get grid information
+        logger.info(f"Retrieving grid information from {geo_file}")
+        grid_info = get_grid_info(filepaths[0], geo_file)
+        
+        # Read input data
+        logger.info(f"Reading data for {variable} from {len(filepaths)} files")
+        ds = read_data(filepaths, variable, chunks)
+        
+        # Process the variable - this is mostly I/O and simple aggregation
+        logger.info(f"Processing variable {variable}")
+        processed_ds = process_variable(ds, variable)
+        
+        # Clean up intermediate data to free memory
+        del ds
+        io_client.run(lambda: gc.collect())  # Trigger garbage collection on workers
+        
+        # Close I/O client
+        logger.info("Closing I/O phase Dask client")
+        io_client.close()
+        io_cluster.close()
+        
+        # ===== COMPUTATION PHASE =====
+        logger.info("Starting computation phase with balanced configuration")
+        compute_client, compute_cluster = get_dask_client(cores, memory_limit, "balanced")
+        
+        # Regrid to EPSG:3338 - computation intensive
+        logger.info(f"Reprojecting data to EPSG:3338")
+        reprojected_ds = regrid_to_3338(processed_ds, grid_info)
+        
+        # Clean up intermediate data to free memory
+        del processed_ds
+        compute_client.run(lambda: gc.collect())  # Trigger garbage collection on workers
+        
+        write_output(reprojected_ds, output_file)
+        
+        # Clean up final data
+        del reprojected_ds
+        compute_client.run(lambda: gc.collect())  # Trigger garbage collection on workers
         
         return output_file
     
@@ -582,7 +569,6 @@ def main() -> None:
             filepaths=get_year_filepaths(input_dir, year, args.fn_str),
             geo_file=args.geo_file,
             output_dir=output_dir,
-            generate_report=args.generate_report,
             cores=args.cores,
             memory_limit=args.memory_limit,
             overwrite=args.overwrite
