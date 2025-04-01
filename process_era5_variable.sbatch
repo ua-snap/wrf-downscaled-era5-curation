@@ -33,7 +33,7 @@ OVERWRITE=$3  # Optional, set to "overwrite" to force reprocessing
 # Validate arguments
 if [ -z "$YEAR" ] || [ -z "$VARIABLE" ]; then
     echo "Error: Missing arguments"
-    echo "Usage: sbatch process_era5_variable.sbatch <year> <variable> [optimization_mode] [overwrite]"
+    echo "Usage: sbatch process_era5_variable.sbatch <year> <variable> [overwrite]"
     exit 1
 fi
 

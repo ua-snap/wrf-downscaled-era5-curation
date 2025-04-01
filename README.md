@@ -12,13 +12,20 @@ After some experimentation the code is settling on a simplified approach consist
 
 ## Project Structure
 
-The main components of the pipeline are:
+### Main Components
 
 - `process_single_variable.py`: Core processing script that handles one variable/year
 - `process_era5_variable.sbatch`: SLURM job template for individual processing jobs
 - `submit_era5_jobs.py`: Script for submitting multiple jobs
-- `era5_variables.py`: Variable definitions and metadata
+- `era5_variables.py`: Variable definitions and metadata, aggregation functions
 - `config.py`: Configuration settings
+
+### Utilities
+
+There are several modules in the `utils` directory:
+- **dask_utils.py**: Manages Dask client configuration and distributed computing setup
+- **memory.py**: Tracks memory usage during processing
+- **logging.py**: Provides standardized logging configuration
 
 ## Processing a Single Variable for a Single Year
 
