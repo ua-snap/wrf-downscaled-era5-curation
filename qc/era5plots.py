@@ -84,14 +84,16 @@ def extract_data_for_points(locations, ds, var_id):
 
     if "sum" in var_id:
         annual_totals = compute_annual_sum(points_ds, pt_extract=True)
-        tag = "Mean Annual"
-    if "rain" in var_id:
+        tag = "Total Annual"
+    elif "rain" in var_id:
         annual_totals = compute_annual_sum(points_ds, pt_extract=True)
         tag = "Total Annual"
-    # elif "min" in var_id:
-    #     annual_totals = compute_annual_min(points_ds, pt_extract=True)
-    # elif "max" in var_id:
-    #     annual_totals = compute_annual_max(points_ds, pt_extract=True)
+    elif "min" in var_id:
+        annual_totals = compute_annual_mean(points_ds, pt_extract=True)
+        tag = "Mean Annual Daily Minimum"
+    elif "max" in var_id:
+        annual_totals = compute_annual_mean(points_ds, pt_extract=True)
+        tag = "Mean Annual Daily Maximum"
     else:
         annual_totals = compute_annual_mean(points_ds, pt_extract=True)
         tag = "Mean Annual"
@@ -113,7 +115,7 @@ def plot_point_extraction_time_series_small_multiples(locations, df, attrs, tag,
     
     # Create figure with 4 rows and 3 columns
     fig, axes = plt.subplots(nrows=4, ncols=3, figsize=(18, 20), sharex=True, sharey=True)
-    fig.suptitle(f"ERA5 {var_name} Trends by Location - {desc} Annual Summary", fontsize=16, y=1.02)
+    fig.suptitle(f"ERA5 4km - {desc}", fontsize=17, y=1.01)
     
     axes = axes.flatten()
     
@@ -161,17 +163,17 @@ def plot_point_extraction_time_series_small_multiples(locations, df, attrs, tag,
     
     plt.tight_layout()
     if save == True:
-        plt.savefig(f"annual_time_series/{var_abbrev}_annuals_small_multiples.png", dpi=300, bbox_inches='tight')
+        plt.savefig(f"figures/{var_abbrev}_annuals_small_multiples.png", dpi=200, bbox_inches='tight')
     plt.show()
 
 
-def run_point_extraction_figs(lat_lon_locations, var_id):
+def run_point_extraction_figs(lat_lon_locations, var_id, save=False):
     locations = point_locations_to_test(lat_lon_locations)
     fps = list_files_for_variable(var_id)
     ds, ds_attrs = load_all_data_for_variable(fps)
     data_extraction, tag = extract_data_for_points(locations, ds, var_id)
     ds.close()
-    plot_point_extraction_time_series_small_multiples(locations, data_extraction, ds_attrs, tag)
+    plot_point_extraction_time_series_small_multiples(locations, data_extraction, ds_attrs, tag, save)
 
 
 def run_point_extraction_figs_multi(lat_lon_locations: dict, var_ids: list[str]):
@@ -211,7 +213,7 @@ def plot_point_extraction_time_series_small_multiples_multi(
     if unit == "degree_C":
         unit = "°C"
 
-    fig, axes = plt.subplots(nrows=4, ncols=3, figsize=(18, 20), sharex=True, sharey=True)
+    fig, axes = plt.subplots(nrows=4, ncols=3, figsize=(20, 20), sharex=True, sharey=True)
     fig.suptitle(f"ERA5 Trends by Location\n{', '.join(var_ids)}", fontsize=16, y=1.02)
     axes = axes.flatten()
 
@@ -250,6 +252,6 @@ def plot_point_extraction_time_series_small_multiples_multi(
     plt.tight_layout()
     if save:
         fname = "_".join(var_ids) + "_multipoint_annuals.png"
-        plt.savefig(f"annual_time_series/{fname}", dpi=300, bbox_inches='tight')
+        plt.savefig(f"figures/annual_time_series/{fname}", dpi=200, bbox_inches='tight')
     plt.show()
 
