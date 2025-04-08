@@ -1,4 +1,4 @@
-mport glob
+import glob
 import os
 
 import xarray as xr
@@ -12,6 +12,7 @@ from matplotlib import colors
 from matplotlib.colors import TwoSlopeNorm
 from matplotlib.dates import MonthLocator, DateFormatter
 import matplotlib.dates as mdates
+
 
 def point_locations_to_test(lat_lon_di):
     transformer = Transformer.from_crs("EPSG:4326", "EPSG:3338", always_xy=True)
@@ -83,27 +84,30 @@ def extract_data_for_points(locations, ds, var_id):
 
     if "sum" in var_id:
         annual_totals = compute_annual_sum(points_ds, pt_extract=True)
+        tag = "Mean Annual"
     if "rain" in var_id:
         annual_totals = compute_annual_sum(points_ds, pt_extract=True)
+        tag = "Total Annual"
     # elif "min" in var_id:
     #     annual_totals = compute_annual_min(points_ds, pt_extract=True)
     # elif "max" in var_id:
     #     annual_totals = compute_annual_max(points_ds, pt_extract=True)
     else:
         annual_totals = compute_annual_mean(points_ds, pt_extract=True)
+        tag = "Mean Annual"
     
     result_df = annual_totals.to_dataframe().reset_index()
     result_df = result_df.pivot(index='year', columns='point', values=var_id)
     result_df["year"] = result_df.index.values
-    print("Extraction Complete")
-    return result_df
+    return result_df, tag
 
 
-def plot_point_extraction_time_series_small_multiples(locations, df, attrs, save==False):
+def plot_point_extraction_time_series_small_multiples(locations, df, attrs, tag, save=False):
 
     var_name = attrs["standard_name"].replace("_", " ").title()
     desc = attrs["long_name"]
     unit = attrs["units"]
+    var_abbrev = attrs["variable"]
     if unit == "degree_C":
         unit = "°C"
     
@@ -153,23 +157,25 @@ def plot_point_extraction_time_series_small_multiples(locations, df, attrs, save
         ax.set_xlabel('Year', fontsize=10)
     
     for ax in axes[::3]:  # Only show ylabel on first column
-        ax.set_ylabel(f"{var_name} {unit}", fontsize=10)
+        ax.set_ylabel(f"{tag} {var_name} {unit}", fontsize=10)
     
     plt.tight_layout()
-    if save == True
-        plt.savefig(f"annual_time_series/{attrs["variable"]}_annuals_small_multiples.png", dpi=300, bbox_inches='tight')
+    if save == True:
+        plt.savefig(f"annual_time_series/{var_abbrev}_annuals_small_multiples.png", dpi=300, bbox_inches='tight')
     plt.show()
 
 
-def run_point_extraction_figs(locations, var_id):
+def run_point_extraction_figs(lat_lon_locations, var_id):
+    locations = point_locations_to_test(lat_lon_locations)
     fps = list_files_for_variable(var_id)
     ds, ds_attrs = load_all_data_for_variable(fps)
-    data_extraction = extract_data_for_points(locations, ds, var_id)
+    data_extraction, tag = extract_data_for_points(locations, ds, var_id)
     ds.close()
-    plot_point_extraction_time_series_small_multiples(locations, data_extraction, ds_attrs)
+    plot_point_extraction_time_series_small_multiples(locations, data_extraction, ds_attrs, tag)
 
 
-def run_point_extraction_figs_multi(locations: dict, var_ids: list[str]):
+def run_point_extraction_figs_multi(lat_lon_locations: dict, var_ids: list[str]):
+    locations = point_locations_to_test(lat_lon_locations)
     data_by_variable = {}
     attrs_by_variable = {}
 
@@ -235,11 +241,11 @@ def plot_point_extraction_time_series_small_multiples_multi(
     for ax in axes[-3:]:
         ax.set_xlabel('Year', fontsize=10)
     for ax in axes[::3]:
-        ax.set_ylabel(f"Value ({unit})", fontsize=10)
+        ax.set_ylabel(f"Annual ({unit})", fontsize=10)
 
     # Legend (one shared)
     handles, labels = axes[0].get_legend_handles_labels()
-    fig.legend(handles, labels, loc='upper center', ncol=len(var_ids), fontsize=11)
+    fig.legend(handles, labels, loc='upper left', ncol=len(var_ids), fontsize=13)
 
     plt.tight_layout()
     if save:
