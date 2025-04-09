@@ -3,6 +3,7 @@ import os
 
 import xarray as xr
 import numpy as np
+import pandas as pd
 from pyproj import Transformer
 
 import cartopy.crs as ccrs
@@ -254,4 +255,5 @@ def plot_point_extraction_time_series_small_multiples_multi(
         fname = "_".join(var_ids) + "_multipoint_annuals.png"
         plt.savefig(f"figures/annual_time_series/{fname}", dpi=200, bbox_inches='tight')
     plt.show()
+
 
