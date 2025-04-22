@@ -339,13 +339,16 @@ def process_variable(ds: xr.Dataset, variable: str) -> xr.Dataset:
     # Copy attributes from the original variable
     if hasattr(da, "attrs"):
         resampled.attrs.update(da.attrs)
+    # Assign CF standard attributes using info from the lookup table
+    resampled.attrs["long_name"] = var_info.get("description", f"Daily {variable}") 
+    resampled.attrs["units"] = var_info.get("units", "unknown")
+    resampled.attrs["standard_name"] = var_info.get("standard_name", "unknown")
+    # Remove the old description and projection if they exist in the original data
+    resampled.attrs.pop("description", None)
+    resampled.attrs.pop("projection", None)
     
-    # Add a description attribute
-    resampled.attrs["description"] = var_info.get("description", f"Daily {variable}")
-    
-    # Rename Time to time for consistency
-    if "Time" in result_ds.dims:
-        result_ds = result_ds.rename({"Time": "time"})
+    # Re-assign the modified DataArray back to the dataset
+    result_ds[variable] = resampled
     
     return result_ds
 
@@ -371,38 +374,46 @@ def regrid_to_3338(ds: xr.Dataset, grid_info: Dict[str, Any]) -> xr.Dataset:
     )
 
     ds_3338 = ds_proj.rio.reproject("EPSG:3338")
-
-    
     return ds_3338
 
 
 def write_output(ds: xr.Dataset, variable: str, output_file: Path) -> None:
-    """Write output to NetCDF file.
+    """Write output to NetCDF file following CF conventions.
     
     Args:
         ds: xarray Dataset to write
+        variable: The primary variable name in the dataset
         output_file: Output file path
     """
     # Ensure output directory exists
     output_file.parent.mkdir(exist_ok=True, parents=True)
     
-    # Add global attributes
-    ds.attrs["creation_date"] = time.strftime("%Y-%m-%d %H:%M:%S")
-    ds.attrs["source"] = "WRF ERA5 Downscaled Data, Hourly Resolution"
-    ds.attrs["projection"] = "EPSG:3338 (Alaska Albers)"
-    ds.attrs["institution"] = "Alaska Climate Adaptation Science Center"
-    ds.attrs["credit"] = "Chris Waigl"
-    ds.attrs["variable"] = variable
-    ds.attrs["description"] = era5_datavar_lut[variable]["description"]
+    # CF Compliant Attributes 
+    current_time = time.strftime("%Y-%m-%d %H:%M:%S UTC")
+    ds.attrs["Conventions"] = "CF-1.8"
+    ds.attrs["title"] = f"Daily aggregated {variable} from WRF-downscaled ERA5, 4km Alaska Albers"
+    ds.attrs["institution"] = "Alaska Climate Adaptation Science Center, University of Alaska Fairbanks"
+    ds.attrs["source"] = "Hourly WRF-downscaled ERA5"
+    ds.attrs["history"] = f"{current_time}: Created using {Path(__file__).name}"
+    ds.attrs["comment"] = f"Data processed for variable '{variable}' to daily resolution and reprojected to EPSG:3338."
+    ds.attrs["references"] = "Placeholder" # Example reference, update as needed
+
+    # Rename Time to time
+    ds = ds.rename({"Time": "time"})
+    ds.coords["time"].attrs["standard_name"] = "time"
+    ds.coords["time"].attrs["axis"] = "T"
+
+    encoding = {
+        var: {"zlib": True, "complevel": 5} 
+        for var in ds.data_vars 
+    }
 
     # Write to NetCDF file
     logger.info(f"Writing output to {output_file}")
     ds.to_netcdf(
         output_file,
         engine="h5netcdf",
-        encoding={
-            var: {"zlib": True, "complevel": 5} for var in ds.data_vars
-        }
+        encoding=encoding
     )
     logger.info(f"Successfully wrote output to {output_file}")
 
@@ -545,7 +556,6 @@ def process_variable_for_year(
 
 def main() -> None:
     """Main processing function."""
-    # Parse and validate arguments
     args = parse_args()
     
     # Set up logging using the centralized variable logging function
@@ -556,7 +566,6 @@ def main() -> None:
     )
     
     start_mem_monitor()
-    
     try:
         # Set up paths
         input_dir = args.input_dir
