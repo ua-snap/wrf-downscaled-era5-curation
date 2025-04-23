@@ -34,7 +34,7 @@ def load_all_data_for_variable(file_list):
                            chunks={'time': 366},
                            engine="h5netcdf",
                            parallel=True)
-    return ds, ds.attrs
+    return ds
 
 
 def compute_annual_mean(ds, pt_extract=None):
@@ -110,7 +110,7 @@ def plot_point_extraction_time_series_small_multiples(locations, df, attrs, tag,
     var_name = attrs["standard_name"].replace("_", " ").title()
     desc = attrs["long_name"]
     unit = attrs["units"]
-    var_abbrev = attrs["variable"]
+    
     if unit == "degree_C":
         unit = "°C"
     
@@ -164,14 +164,19 @@ def plot_point_extraction_time_series_small_multiples(locations, df, attrs, tag,
     
     plt.tight_layout()
     if save == True:
-        plt.savefig(f"figures/{var_abbrev}_annuals_small_multiples.png", dpi=200, bbox_inches='tight')
+        prefix = desc.replace(" ", "_").lower()
+        plt.savefig(f"figures/{prefix}_annual_agg_communities.png",
+                    dpi=144,
+                    bbox_inches='tight')
     plt.show()
-
 
 def run_point_extraction_figs(lat_lon_locations, var_id, save=False):
     locations = point_locations_to_test(lat_lon_locations)
     fps = list_files_for_variable(var_id)
-    ds, ds_attrs = load_all_data_for_variable(fps)
+    ds = load_all_data_for_variable(fps)
+
+    ds_attrs = ds[var_id].attrs
+    
     data_extraction, tag = extract_data_for_points(locations, ds, var_id)
     ds.close()
     plot_point_extraction_time_series_small_multiples(locations, data_extraction, ds_attrs, tag, save)
@@ -268,9 +273,10 @@ def plot_daily_normals_two_periods(
 
     locations = point_locations_to_test(lat_lon_locations)
     fps = list_files_for_variable(var_id)
-    ds, ds_attrs = load_all_data_for_variable(fps)
+    ds = load_all_data_for_variable(fps)
 
     var = ds[var_id]
+    ds_attrs = var.attrs
 
     def extract_daily_climatology(ds_subset: xr.DataArray, years: tuple[int, int]) -> xr.DataArray:
         """Compute daily climatology over a specified year range."""

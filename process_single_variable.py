@@ -329,10 +329,8 @@ def process_variable(ds: xr.Dataset, variable: str) -> xr.Dataset:
     
     # Extract the variable data array and resample
     da = ds[source_var]
-    
     # Resample to daily frequency and apply the aggregation function
     resampled = da.resample(Time="1D").map(agg_func).rename(variable)
-    
     # Create a new dataset with the resampled data
     result_ds = resampled.to_dataset()
     
