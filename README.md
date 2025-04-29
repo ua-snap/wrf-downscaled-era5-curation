@@ -23,7 +23,7 @@ There are several modules in the `utils` directory:
 
 ### Processing a Single Variable for a Single Year
 
-This is **not** the recommendeded entry point for the pipeline, but it is useful for rapid testing and for isolating the sbatch template and worker script from the job submission script. To manually process a single variable for a single yea:
+This is **not** the recommended entry point for the pipeline, but it is useful for rapid testing and for isolating the sbatch template and worker script from the job submission script. To manually process a single variable for a single year:
 
 ```bash
 # Basic usage
