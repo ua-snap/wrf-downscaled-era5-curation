@@ -5,12 +5,83 @@ for finding variables and validating variable requests. The variables are stored
 in a flat dictionary structure for simplified access and processing.
 """
 
-import logging
+import numpy as np
+import xarray as xr
+from scipy.stats import circmean
 from typing import Dict, List, Any, Optional, Set, Tuple
+
+# Define a custom circular mean function that preserves spatial dimensions
+def calc_circular_mean_wind_dir(x):
+    """Calculate circular mean of wind direction along time dimension.
+    
+    This function calculates the circular mean of wind direction data, treating
+    the data as angles in degrees. It preserves spatial dimensions while reducing
+    along the time dimension.
+    """
+    # Convert to radians for circular mean calculation
+    x_rad = np.deg2rad(x)
+    
+    # Calculate sin and cos components
+    sin_component = np.sin(x_rad).mean(dim="Time")
+    cos_component = np.cos(x_rad).mean(dim="Time")
+    
+    # Calculate the circular mean and convert back to degrees
+    result = np.rad2deg(np.arctan2(sin_component, cos_component))
+    
+    # Ensure result is in [0, 360) range
+    return (result + 360) % 360
 
 # Flattened variable lookup table - all variables in a single dictionary
 # CP note: tried lumping these in categories, but it was unweildy
 era5_datavar_lut: Dict[str, Dict[str, Any]] = {
+    "t2_mean": {
+        "var_id": "T2",
+        "short_name": "t2m",
+        "standard_name": "air_temperature",
+        "units": "degree_C",
+        "agg_func": lambda x: x.mean(dim="Time") - 273.15,
+        "description": "Daily mean temperature at 2 meters",
+    },
+    "t2_min": {
+        "var_id": "T2",
+        "short_name": "t2m",
+        "standard_name": "air_temperature",
+        "units": "degree_C",
+        "agg_func": lambda x: x.min(dim="Time") - 273.15,
+        "description": "Daily minimum temperature at 2 meters",
+    },
+    "t2_max": {
+        "var_id": "T2",
+        "short_name": "t2m",
+        "standard_name": "air_temperature",
+        "units": "degree_C",
+        "agg_func": lambda x: x.max(dim="Time") - 273.15,
+        "description": "Daily maximum temperature at 2 meters",
+    },
+    "wspd10_mean": {
+        "var_id": "wspd10",
+        "short_name": "wspd10m",
+        "standard_name": "wind_speed",
+        "units": "m s-1",
+        "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean 10m wind speed",
+    },
+    "wspd10_max": {
+        "var_id": "wspd10",
+        "short_name": "wspd10m",
+        "standard_name": "wind_speed",
+        "units": "m s-1",
+        "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum 10m wind speed",
+    },
+    "wdir10_mean": {
+        "var_id": "wdir10",
+        "short_name": "wdir10m",
+        "standard_name": "wind_from_direction",
+        "units": "degree",
+        "agg_func": calc_circular_mean_wind_dir,
+        "description": "Daily mean 10m wind direction",
+    },
     "slp_mean": {
         "var_id": "slp",
         "short_name": "slp",
@@ -74,30 +145,6 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "%",
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum 2m relative humidity",
-    },
-    "t2_mean": {
-        "var_id": "T2",
-        "short_name": "t2m",
-        "standard_name": "air_temperature",
-        "units": "degree_C",
-        "agg_func": lambda x: x.mean(dim="Time") - 273.15,
-        "description": "Daily mean temperature at 2 meters",
-    },
-    "t2_min": {
-        "var_id": "T2",
-        "short_name": "t2m",
-        "standard_name": "air_temperature",
-        "units": "degree_C",
-        "agg_func": lambda x: x.min(dim="Time") - 273.15,
-        "description": "Daily minimum temperature at 2 meters",
-    },
-    "t2_max": {
-        "var_id": "T2",
-        "short_name": "t2m",
-        "standard_name": "air_temperature",
-        "units": "degree_C",
-        "agg_func": lambda x: x.max(dim="Time") - 273.15,
-        "description": "Daily maximum temperature at 2 meters",
     },
     "q2_mean": {
         "var_id": "Q2",
@@ -186,30 +233,6 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "1",
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum cloud fraction",
-    },
-    "wspd10_mean": {
-        "var_id": "wspd10",
-        "short_name": "wspd10m",
-        "standard_name": "wind_speed",
-        "units": "m s-1",
-        "agg_func": lambda x: x.mean(dim="Time"),
-        "description": "Daily mean 10m wind speed",
-    },
-    "wspd10_max": {
-        "var_id": "wspd10",
-        "short_name": "wspd10m",
-        "standard_name": "wind_speed",
-        "units": "m s-1",
-        "agg_func": lambda x: x.max(dim="Time"),
-        "description": "Daily maximum 10m wind speed",
-    },
-    "wdir10_mean": {
-        "var_id": "wdir10",
-        "short_name": "wdir10m",
-        "standard_name": "wind_from_direction",
-        "units": "degree",
-        "agg_func": lambda x: x.mean(dim="Time"),
-        "description": "Daily mean 10m wind direction",
     },
     "u10_mean": {
         "var_id": "u10",
