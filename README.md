@@ -141,7 +141,7 @@ Each NetCDF file contains the processed data for one variable and one year, with
 - 4 km spatial resolution
 - EPSG:3338 Alaska Albers projection
 - Mode compression applied for reduced file size
-- CF compliance
+- CF compliant (mostly)
 
 ## Troubleshooting
 

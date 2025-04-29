@@ -5,34 +5,10 @@ for finding variables and validating variable requests. The variables are stored
 in a flat dictionary structure for simplified access and processing.
 """
 
-import numpy as np
-import xarray as xr
-from scipy.stats import circmean
 from typing import Dict, List, Any, Optional, Set, Tuple
 
-# Define a custom circular mean function that preserves spatial dimensions
-def calc_circular_mean_wind_dir(x):
-    """Calculate circular mean of wind direction along time dimension.
-    
-    This function calculates the circular mean of wind direction data, treating
-    the data as angles in degrees. It preserves spatial dimensions while reducing
-    along the time dimension.
-    """
-    # Convert to radians for circular mean calculation
-    x_rad = np.deg2rad(x)
-    
-    # Calculate sin and cos components
-    sin_component = np.sin(x_rad).mean(dim="Time")
-    cos_component = np.cos(x_rad).mean(dim="Time")
-    
-    # Calculate the circular mean and convert back to degrees
-    result = np.rad2deg(np.arctan2(sin_component, cos_component))
-    
-    # Ensure result is in [0, 360) range
-    return (result + 360) % 360
+from utils.custom_agg_funcs import calc_circular_mean_wind_dir
 
-# Flattened variable lookup table - all variables in a single dictionary
-# CP note: tried lumping these in categories, but it was unweildy
 era5_datavar_lut: Dict[str, Dict[str, Any]] = {
     "t2_mean": {
         "var_id": "T2",
@@ -57,6 +33,14 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "degree_C",
         "agg_func": lambda x: x.max(dim="Time") - 273.15,
         "description": "Daily maximum temperature at 2 meters",
+    },
+    "rainnc_sum": {
+        "var_id": "rainnc",
+        "short_name": "prnc",
+        "standard_name": "precipitation_amount",
+        "units": "mm", # equivalent to, but not the CF standard unit (kg m-2)
+        "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated total grid-scale precipitation",
     },
     "wspd10_mean": {
         "var_id": "wspd10",
@@ -337,14 +321,6 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "1",
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum snow cover fraction",
-    },
-    "rainnc_sum": {
-        "var_id": "rainnc",
-        "short_name": "prnc",
-        "standard_name": "precipitation_amount",
-        "units": "mm",
-        "agg_func": lambda x: x.sum(dim="Time"),
-        "description": "Daily accumulated total grid-scale precipitation",
     },
     "rainc_sum": {
         "var_id": "rainc",
