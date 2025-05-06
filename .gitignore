@@ -3,6 +3,8 @@ deprecated_code_backup/
 .cursor*
 cursor*
 logs/
+Jupyter.*
+
 
 # Byte-compiled / optimized / DLL files
 __pycache__/
