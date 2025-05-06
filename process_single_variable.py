@@ -32,6 +32,9 @@ from utils.dask_utils import (
 )
 from utils.logging import get_logger, setup_variable_logging
 
+# Batch size for file processing to reduce metadata contention
+BATCH_SIZE = 30
+
 # Get a named logger for this module
 logger = get_logger(__name__)
 
@@ -375,6 +378,55 @@ def regrid_to_3338(ds: xr.Dataset, grid_info: Dict[str, Any]) -> xr.Dataset:
     return ds_3338
 
 
+def process_files_in_batches(
+    filepaths: List[Path], 
+    variable: str, 
+    chunks: Dict[str, Union[str, int]]
+) -> xr.Dataset:
+    """Process files in smaller batches to reduce metadata contention.
+    
+    Args:
+        filepaths: List of input file paths
+        variable: Variable name to process
+        chunks: Chunk sizes for Dask
+    
+    Returns:
+        xarray Dataset with data from all batches
+    """
+    # Calculate number of batches
+    num_files = len(filepaths)
+    num_batches = (num_files + BATCH_SIZE - 1) // BATCH_SIZE  # Ceiling division
+    
+    logger.info(f"Processing {num_files} files in {num_batches} batches of {BATCH_SIZE}")
+    
+    # Initialize with empty dataset
+    combined_ds = None
+    
+    # Process each batch
+    for i in range(num_batches):
+        start_idx = i * BATCH_SIZE
+        end_idx = min((i + 1) * BATCH_SIZE, num_files)
+        batch_files = filepaths[start_idx:end_idx]
+        
+        logger.info(f"Processing batch {i+1}/{num_batches} with {len(batch_files)} files")
+        
+        # Read this batch of files
+        batch_ds = read_data(batch_files, variable, chunks)
+        
+        # If this is the first batch, use it as the base dataset
+        if combined_ds is None:
+            combined_ds = batch_ds
+        else:
+            # Combine with previous batches along the time dimension
+            combined_ds = xr.concat([combined_ds, batch_ds], dim="Time")
+            # Clean up batch dataset to free memory
+            del batch_ds
+            gc.collect()
+    
+    logger.info(f"Successfully processed all {num_batches} batches")
+    return combined_ds
+
+
 def write_output(ds: xr.Dataset, variable: str, output_file: Path) -> None:
     """Write output to NetCDF file following CF conventions.
     
@@ -400,6 +452,9 @@ def write_output(ds: xr.Dataset, variable: str, output_file: Path) -> None:
     ds = ds.rename({"Time": "time"})
     ds.coords["time"].attrs["standard_name"] = "time"
     ds.coords["time"].attrs["axis"] = "T"
+
+    # Set spatial dimensions
+    ds = ds.rio.set_spatial_dims(x_dim="x", y_dim="y", inplace=True)
 
     encoding = {
         var: {"zlib": True, "complevel": 5} 
@@ -432,6 +487,9 @@ def process_variable_for_year(
     parallelization within a single compute node. It reads the hourly ERA5 data,
     applies the appropriate aggregation function, regrids to EPSG:3338, and writes
     the output to a NetCDF file.
+    
+    Files are processed in small batches (defined by BATCH_SIZE) to reduce metadata 
+    contention on the filesystem.
     
     Args:
         variable: Variable to process
@@ -470,9 +528,9 @@ def process_variable_for_year(
         logger.info(f"Retrieving grid information from {geo_file}")
         grid_info = get_grid_info(filepaths[0], geo_file)
         
-        # Read input data
-        logger.info(f"Reading data for {variable} from {len(filepaths)} files")
-        ds = read_data(filepaths, variable, chunks)
+        # Read input data in batches to reduce metadata contention
+        logger.info(f"Reading data for {variable} from {len(filepaths)} files in batches of {BATCH_SIZE}")
+        ds = process_files_in_batches(filepaths, variable, chunks)
         
         # Process the variable - this is mostly I/O and simple aggregation
         logger.info(f"Processing variable {variable}")
