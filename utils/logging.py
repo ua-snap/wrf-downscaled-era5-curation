@@ -1,6 +1,18 @@
+"""Logging utilities.
+
+Will create a log structure like this example:
+logs/
+├── era5_process
+│ ├── rainnc_sum
+│ ├── ...next_variable
+│ └── ...next_variable
+└── submit_era5_jobs
+
+with one *.out log file per variable, per year.
+The job submission log is in the submit_era5_jobs directory.
+"""
+
 import logging
-import os
-import sys
 from logging.handlers import RotatingFileHandler
 from pathlib import Path
 from typing import Optional, Union
@@ -67,7 +79,8 @@ def setup_variable_logging(
     year: Optional[int] = None, 
     base_dir: Optional[Union[str, Path]] = None,
     verbose: bool = False,
-    console: bool = True
+    console: bool = True,
+    console_only: bool = False
 ) -> None:
     """Set up logging specifically for variable processing.
     
@@ -82,6 +95,7 @@ def setup_variable_logging(
         base_dir: Base directory for logs (defaults to current working directory)
         verbose: Whether to use verbose (DEBUG) logging
         console: Whether to output logs to console
+        console_only: If True, only log to console (no file logging)
     """
     # Set log level based on verbose flag
     log_level = logging.DEBUG if verbose else logging.INFO
@@ -90,24 +104,31 @@ def setup_variable_logging(
     if base_dir is None:
         base_dir = Path.cwd()
     
-    try:
-        # Create variable-specific log file
-        log_file = get_log_file_path(base_dir, variable, year)
-        configure_logging(level=log_level, log_file=log_file, console=console)
+    if console_only:
+        # Console-only logging, no file creation
+        configure_logging(level=log_level, log_file=None, console=console)
         # Get a logger to output a confirmation message
         logger = get_logger(__name__)
-        logger.info(f"Logging configured for {variable}" + (f" year {year}" if year else ""))
-    except Exception as e:
-        # Use print since logger may not be configured yet
-        print(f"WARNING: Could not configure file logging: {e}")
-        print("WARNING: Falling back to console-only logging")
-        configure_logging(level=log_level, console=True)
+        logger.info(f"Console-only logging configured for {variable}" + (f" year {year}" if year else ""))
+    else:
+        try:
+            # Create variable-specific log file
+            log_file = get_log_file_path(base_dir, variable, year)
+            configure_logging(level=log_level, log_file=log_file, console=console)
+            # Get a logger to output a confirmation message
+            logger = get_logger(__name__)
+            logger.info(f"Logging configured for {variable}" + (f" year {year}" if year else ""))
+        except Exception as e:
+            # Use print since logger may not be configured yet
+            print(f"WARNING: Could not configure file logging: {e}")
+            print("WARNING: Falling back to console-only logging")
+            configure_logging(level=log_level, console=True)
 
 
 def configure_logging(
     level: int = logging.DEBUG,
     log_file: Optional[Union[str, Path]] = None,
-    max_size_mb: int = 10,
+    max_size_mb: int = 1,
     backup_count: int = 3,
     console: bool = True,
     format_str: Optional[str] = None
