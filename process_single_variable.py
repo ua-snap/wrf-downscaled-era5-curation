@@ -25,17 +25,15 @@ from pyproj import CRS, Transformer, Proj
 
 from era5_variables import era5_datavar_lut
 from config import config
-from utils.memory import start as start_mem_monitor, stop as stop_mem_monitor
 from utils.dask_utils import (
     get_dask_client, 
     configure_dask_memory
 )
 from utils.logging import get_logger, setup_variable_logging
 
-# Batch size for file processing to reduce metadata contention
+# CP note: batch size for file processing, I think this reduces the chance of dask hanging
 BATCH_SIZE = 30
 
-# Get a named logger for this module
 logger = get_logger(__name__)
 
 def parse_args() -> argparse.Namespace:
@@ -395,7 +393,7 @@ def process_files_in_batches(
     """
     # Calculate number of batches
     num_files = len(filepaths)
-    num_batches = (num_files + BATCH_SIZE - 1) // BATCH_SIZE  # Ceiling division
+    num_batches = (num_files + BATCH_SIZE - 1) // BATCH_SIZE 
     
     logger.info(f"Processing {num_files} files in {num_batches} batches of {BATCH_SIZE}")
     
@@ -619,9 +617,9 @@ def main() -> None:
         variable=args.variable,
         year=args.year,
         base_dir=Path.cwd(),
+        console_only=True
     )
     
-    start_mem_monitor()
     try:
         # Set up paths
         input_dir = args.input_dir
@@ -648,7 +646,7 @@ def main() -> None:
             logger.error(f"Failed to process {variable} for year {year}")
             sys.exit(1)
     finally:
-        stop_mem_monitor()
+        pass
 
 
 if __name__ == "__main__":
