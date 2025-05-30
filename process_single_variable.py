@@ -32,7 +32,7 @@ from utils.dask_utils import (
 from utils.logging import get_logger, setup_variable_logging
 
 # CP note: batch size for file processing, I think this reduces the chance of dask hanging
-BATCH_SIZE = 30
+BATCH_SIZE = 90
 
 logger = get_logger(__name__)
 

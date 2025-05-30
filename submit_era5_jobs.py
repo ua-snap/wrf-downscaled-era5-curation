@@ -27,7 +27,6 @@ from era5_variables import era5_datavar_lut, list_all_variables
 from config import config
 from utils.logging import get_logger, create_log_directory, setup_variable_logging
 
-# Get a named logger for this module
 logger = get_logger(__name__)
 
 
@@ -39,22 +38,10 @@ def parse_args() -> argparse.Namespace:
     """
     parser = argparse.ArgumentParser(description=__doc__)
     
-    # Variable selection (mutually exclusive)
-    var_group = parser.add_mutually_exclusive_group(required=True)
-    var_group.add_argument(
-        "--variable",
-        type=str,
-        help="Single variable to process"
-    )
-    var_group.add_argument(
+    parser.add_argument(
         "--variables",
         type=str,
         help="Comma-separated list of variables to process"
-    )
-    var_group.add_argument(
-        "--all_variables",
-        action="store_true",
-        help="Process all available variables"
     )
     
     # Year range
@@ -107,12 +94,8 @@ def get_variables_to_process(args: argparse.Namespace) -> List[str]:
     Returns:
         List of variable names to process
     """
-    if args.variable:
-        variables = [args.variable]
-    elif args.variables:
+    if args.variables:
         variables = [v.strip() for v in args.variables.split(",") if v.strip()]
-    elif args.all_variables:
-        variables = list_all_variables()
     else:
         raise ValueError("No variables specified")
     
@@ -182,7 +165,7 @@ def submit_individual_jobs(
                     break
                 
                 logger.info(f"Currently {current_jobs} jobs in queue, waiting for some to complete...")
-                time.sleep(30)
+                time.sleep(15)
             except subprocess.CalledProcessError:
                 logger.warning("Failed to check current job count, proceeding with submission")
                 break

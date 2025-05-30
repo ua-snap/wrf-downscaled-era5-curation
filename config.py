@@ -83,8 +83,6 @@ class Config:
             self.START_YEAR = args.start_year
         if hasattr(args, 'end_year') and args.end_year is not None:
             self.END_YEAR = args.end_year
-        if hasattr(args, 'variable') and args.variable is not None:
-            self.DATA_VARS = [args.variable]
         elif hasattr(args, 'variables') and args.variables is not None:
             self.DATA_VARS = [v.strip() for v in args.variables.split(",") if v.strip()]
         # Log the updated configuration

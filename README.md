@@ -32,14 +32,8 @@ The pipeline should be executed on Chinook, and can be launched from a "login" o
 The job submission script is the recommended method of executing this pipeline. For example:
 
 ```bash
-# Process a single variable for a range of years
-python submit_era5_jobs.py --variable t2_mean --start_year 1980 --end_year 1985
-
 # Process multiple variables for a range of years
 python submit_era5_jobs.py --variables t2_mean,t2_min,t2_max,rh2_mean --start_year 1990 --end_year 2000
-
-# CP NOTE: NOT WORKING YET Process all variables for a single year
-python submit_era5_jobs.py --all_variables --start_year 2000 --end_year 2000
 ```
 
 #### More Job Submission Options
