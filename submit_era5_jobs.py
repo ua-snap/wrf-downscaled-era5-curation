@@ -5,12 +5,22 @@ This script generates SLURM job submissions for processing ERA5 variables for
 specified years: one job per variable, per year. It provides options for controlling
 the number of concurrent jobs and includes automatic retry functionality for jobs that timeout.
 
+Configuration is handled through environment variables:
+    ERA5_INPUT_DIR: Input directory containing ERA5 data
+    ERA5_OUTPUT_DIR: Output directory for processed files
+    ERA5_GEO_FILE: Path to WRF geo_em file for projection information
+    ERA5_START_YEAR: Start year for processing
+    ERA5_END_YEAR: End year for processing
+
 Example usage:
     # Process t2_mean for years 1980-1985
-    python submit_era5_jobs.py --variable t2_mean --start_year 1980 --end_year 1985
+    python submit_era5_jobs.py --variables t2_mean --start_year 1980 --end_year 1985
     
     # Process multiple variables for a range of years
     python submit_era5_jobs.py --variables t2_mean,t2_min,t2_max --start_year 1990 --end_year 2000
+    
+    # Process with automatic retry disabled
+    python submit_era5_jobs.py --variables t2_mean --start_year 1980 --end_year 1985 --no_retry
 """
 
 import argparse
@@ -23,8 +33,8 @@ import time
 from pathlib import Path
 from typing import List, Dict, Tuple
 
-from era5_variables import era5_datavar_lut, list_all_variables
-from config import config
+from era5_variables import era5_datavar_lut
+from config import data_config, config
 from utils.logging import get_logger, create_log_directory, setup_variable_logging
 
 logger = get_logger(__name__)
@@ -64,12 +74,6 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=30,
         help="Maximum number of concurrent jobs (default: 30)"
-    )
-    parser.add_argument(
-        "--output_dir",
-        type=Path,
-        default=config.OUTPUT_DIR,
-        help=f"Output directory (default: {config.OUTPUT_DIR})"
     )
     parser.add_argument(
         "--overwrite",
@@ -388,14 +392,13 @@ def submit_timeout_retries(timeout_jobs: List[Tuple[str, int]], overwrite: bool 
     return retry_count
 
 
-def validate_job_completion(variables: List[str], start_year: int, end_year: int, output_dir: Path) -> None:
-    """Validate that all expected output files exist.
+def validate_job_completion(variables: List[str], start_year: int, end_year: int) -> None:
+    """Validate that all expected output files exist and are valid NetCDF files.
     
     Args:
-        variables: List of variables processed
-        start_year: Start year for processing
-        end_year: End year for processing
-        output_dir: Output directory to check
+        variables: List of variables that were processed
+        start_year: Starting year
+        end_year: Ending year (inclusive)
     """
     logger.info("Validating job completion by checking output files...")
     
@@ -404,9 +407,8 @@ def validate_job_completion(variables: List[str], start_year: int, end_year: int
     existing_files = 0
     
     for variable in variables:
-        var_dir = output_dir / variable
         for year in range(start_year, end_year + 1):
-            expected_file = var_dir / f"{variable}_{year}_daily_era5_4km_3338.nc"
+            expected_file = data_config.get_output_file(variable, year)
             
             if expected_file.exists() and expected_file.stat().st_size > 0:
                 existing_files += 1
@@ -443,48 +445,33 @@ def main() -> None:
     # Wipe existing SLURM output logs for a fresh run
     wipe_slurm_output_logs()
 
-    # Process variables
     variables = get_variables_to_process(args)
     
-    # Submit jobs for all variable/year combinations
-    try:
-        job_ids = submit_individual_jobs(
-            variables=variables,
-            start_year=args.start_year,
-            end_year=args.end_year,
-            max_concurrent=args.max_concurrent,
-            overwrite=args.overwrite
-        )
-    except Exception as e:
-        logger.error(f"Error submitting jobs: {e}")
-        sys.exit(1)
+    # Submit jobs for each variable/year combination
+    job_ids = submit_individual_jobs(
+        variables=variables,
+        start_year=args.start_year,
+        end_year=args.end_year,
+        max_concurrent=args.max_concurrent,
+        overwrite=args.overwrite
+    )
     
-    # Handle timeout retries if not disabled
+    # Wait for all jobs to complete
+    wait_for_jobs_completion()
+    
+    # Handle retries for timed-out jobs if enabled
     if not args.no_retry:
-        try:
-            # Wait for all jobs to complete
-            wait_for_jobs_completion()
-            
-            # Check for timed-out jobs
-            timeout_jobs = detect_timed_out_jobs()
-            
-            # Submit retries for timed-out jobs
-            if timeout_jobs:
-                retry_count = submit_timeout_retries(timeout_jobs, overwrite=args.overwrite)
-                logger.info(f"Timeout retry process complete. Submitted {retry_count} retry jobs.")
-            else:
-                logger.info("No timeout retries needed.")
-                
-            # Validate job completion
-            validate_job_completion(variables, args.start_year, args.end_year, args.output_dir)
-                
-        except Exception as e:
-            logger.error(f"Error during timeout retry process: {e}")
-            logger.warning("Continuing without retries...")
-    else:
-        logger.info("Timeout retry disabled by --no_retry flag")
+        timeout_jobs = detect_timed_out_jobs()
+        if timeout_jobs:
+            logger.info(f"Found {len(timeout_jobs)} timed-out jobs to retry")
+            num_retried = submit_timeout_retries(timeout_jobs, args.overwrite)
+            if num_retried > 0:
+                wait_for_jobs_completion()
     
-    logger.info("Done.")
+    # Validate that all expected output files exist and are valid
+    validate_job_completion(variables, args.start_year, args.end_year)
+    
+    logger.info("All processing completed successfully")
 
 
 if __name__ == "__main__":

@@ -5,9 +5,20 @@ This script processes one ERA5 variable for one year, using Dask for paralleliza
 within a single compute node. It reads the hourly ERA5 data, applies the appropriate
 aggregation function, regrids to EPSG:3338, and writes the output to a NetCDF file.
 
+Configuration is handled through environment variables:
+    ERA5_INPUT_DIR: Input directory containing ERA5 data
+    ERA5_OUTPUT_DIR: Output directory for processed files
+    ERA5_GEO_FILE: Path to WRF geo_em file for projection information
+
 Example usage:
+    # Basic usage with default configuration
     python process_single_variable.py --year 1980 --variable t2_mean 
-    python process_single_variable.py --year 1990 --variable rainnc_sum --input_dir /path/to/data --output_dir /path/to/output
+
+    # With performance tuning
+    python process_single_variable.py --year 1990 --variable rainnc_sum --cores 24 --memory_limit "85GB"
+
+    # Force reprocessing of existing files
+    python process_single_variable.py --year 1980 --variable t2_mean --overwrite
 """
 
 import argparse
@@ -22,9 +33,8 @@ import xarray as xr
 import rioxarray
 from pyproj import CRS, Transformer, Proj
 
-
 from era5_variables import era5_datavar_lut
-from config import config
+from config import data_config
 from utils.dask_utils import (
     get_dask_client, 
     configure_dask_memory
@@ -38,6 +48,15 @@ logger = get_logger(__name__)
 
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments.
+    
+    Required arguments:
+        --year: Year to process
+        --variable: Variable name to process
+    
+    Optional arguments:
+        --overwrite: Force reprocessing of existing files
+        --cores: Number of cores to use (default: auto-detect)
+        --memory_limit: Memory limit for Dask workers (default: 16GB)
     
     Returns:
         Parsed arguments
@@ -58,31 +77,7 @@ def parse_args() -> argparse.Namespace:
         help="Variable to process"
     )
     
-    # Optional arguments with defaults
-    parser.add_argument(
-        "--input_dir",
-        type=Path,
-        default=config.INPUT_DIR,
-        help=f"Directory containing ERA5 data (default: {config.INPUT_DIR})"
-    )
-    parser.add_argument(
-        "--output_dir",
-        type=Path,
-        default=config.OUTPUT_DIR,
-        help=f"Directory for output files (default: {config.OUTPUT_DIR})"
-    )
-    parser.add_argument(
-        "--geo_file",
-        type=Path,
-        default=config.GEO_EM_FILE,
-        help=f"Path to WRF geo_em file for projection information (default: {config.GEO_EM_FILE})"
-    )
-    parser.add_argument(
-        "--fn_str",
-        type=str,
-        default=config.INPUT_FILE_PATTERN,
-        help=f"File pattern for input files (default: {config.INPUT_FILE_PATTERN})"
-    )
+    # Optional arguments
     parser.add_argument(
         "--overwrite",
         action="store_true",
@@ -102,6 +97,7 @@ def parse_args() -> argparse.Namespace:
         default="16GB",
         help="Memory limit for Dask workers (default: 16GB)"
     )
+    
     args = parser.parse_args()
     
     # Validate the variable
@@ -113,26 +109,23 @@ def parse_args() -> argparse.Namespace:
     
     return args
 
-
-def get_year_filepaths(era5_dir: Path, year: int, fn_str: str) -> List[Path]:
+def get_year_filepaths(year: int) -> List[Path]:
     """Get all filepaths for a single year of ERA5 data.
-
+    
     Args:
-        era5_dir: Directory containing ERA5 data
         year: Year to process
-        fn_str: Filename pattern for input files
     
     Returns:
         List of filepaths for the year
     """
-    year_dir = era5_dir.joinpath(str(year))
+    year_dir = data_config.get_year_dir(year)
     if not year_dir.exists():
         raise FileNotFoundError(f"Year directory not found: {year_dir}")
     
     # Use glob to find all files matching the pattern
     # Format the date part of the pattern with the year and a wildcard for month/day
     date_pattern = f"{year}-*"
-    file_pattern = fn_str.format(date=date_pattern)
+    file_pattern = data_config.file_pattern.format(date=date_pattern)
     
     fps = sorted(year_dir.glob(file_pattern))
     
@@ -142,31 +135,26 @@ def get_year_filepaths(era5_dir: Path, year: int, fn_str: str) -> List[Path]:
     logger.info(f"Found {len(fps)} files for year {year}")
     return fps
 
-
-def check_output_exists(output_dir: Path, variable: str, year: int) -> Tuple[bool, Path]:
+def check_output_exists(variable: str, year: int) -> Tuple[bool, Path]:
     """Check if output file already exists.
-
+    
     Args:
-        output_dir: Output directory
         variable: Variable name
         year: Year to process
     
     Returns:
         Tuple of (exists, output_path)
     """
-    # Create variable subdirectory if it doesn't exist
-    var_dir = output_dir.joinpath(variable)
-    var_dir.mkdir(exist_ok=True, parents=True)
+    output_file = data_config.get_output_file(variable, year)
     
-    # Output filename: variable_year_daily_era5_4km_3338.nc
-    output_file = var_dir.joinpath(f"{variable}_{year}_daily_era5_4km_3338.nc")
+    # Create variable subdirectory if it doesn't exist
+    output_file.parent.mkdir(exist_ok=True, parents=True)
     
     exists = output_file.exists()
     if exists:
         logger.info(f"Output file already exists: {output_file}")
     
     return exists, output_file
-
 
 def is_3d_variable(variable: str) -> bool:
     """Determine if a variable is 3D (has vertical levels).
@@ -189,7 +177,6 @@ def is_3d_variable(variable: str) -> bool:
         "dbz", "twb", "rh", "temp", "height", "CLDFRA", "QVAPOR", "u", "v", "w",
         "SMOIS", "SH2O", "TSLB"
     ]
-
 
 def get_variable_chunks(variable: str) -> Dict[str, Union[str, int]]:
     """Get optimal chunk sizes for a variable.
@@ -219,7 +206,6 @@ def get_variable_chunks(variable: str) -> Dict[str, Union[str, int]]:
             "south_north": -1,   # Use full chunks for south_north to avoid splitting
             "west_east": -1      # Use full chunks for west_east to avoid splitting
         }
-
 
 def get_grid_info(tmp_file, geo_file):
     ds = xr.open_dataset(tmp_file)
@@ -472,9 +458,6 @@ def write_output(ds: xr.Dataset, variable: str, output_file: Path) -> None:
 def process_variable_for_year(
     variable: str,
     year: int,
-    filepaths: List[Path],
-    geo_file: Path,
-    output_dir: Path,
     cores: Optional[int] = None,
     memory_limit: str = "16GB",
     overwrite: bool = False
@@ -492,9 +475,6 @@ def process_variable_for_year(
     Args:
         variable: Variable to process
         year: Year to process
-        filepaths: List of input file paths
-        geo_file: Path to WRF geo_em file for projection information
-        output_dir: Directory for output files
         cores: Number of cores to use (default: auto-detect)
         memory_limit: Memory limit for Dask workers
         overwrite: Whether to overwrite existing output files
@@ -503,9 +483,9 @@ def process_variable_for_year(
         Path to the output file if successful, None otherwise
     """
     # Check if output already exists
-    exists, output_file = check_output_exists(output_dir, variable, year)
+    exists, output_file = check_output_exists(variable, year)
     if exists and not overwrite:
-        logger.info(f"Output file {output_file} already exists, skipping (overwrite=False)")
+        logger.info(f"Output file exists, skipping (overwrite=False)")
         return None
     
     # Initialize client variables outside try block
@@ -523,10 +503,11 @@ def process_variable_for_year(
         io_client, io_cluster = get_dask_client(cores, memory_limit, "io_bound")
         
         # Get grid information
-        logger.info(f"Retrieving grid information from {geo_file}")
-        grid_info = get_grid_info(filepaths[0], geo_file)
+        logger.info(f"Retrieving grid information from {data_config.geo_file}")
+        grid_info = get_grid_info(get_year_filepaths(year)[0], data_config.geo_file)
         
         # Read input data in batches to reduce metadata contention
+        filepaths = get_year_filepaths(year)
         logger.info(f"Reading data for {variable} from {len(filepaths)} files in batches of {BATCH_SIZE}")
         ds = process_files_in_batches(filepaths, variable, chunks)
         
@@ -563,18 +544,6 @@ def process_variable_for_year(
         
         return output_file
     
-    except RecursionError as e:
-        logger.error(f"RecursionError processing {variable} for year {year}: {e}")
-        logger.error("Try increasing dask.config.set({'distributed.worker.memory.sizeof.sizeof-recurse-limit': 100})")
-        import traceback
-        logger.error(traceback.format_exc())
-        return None
-    except MemoryError as e:
-        logger.error(f"MemoryError processing {variable} for year {year}: {e}")
-        logger.error("Try increasing memory_limit in the SLURM script and reducing chunk sizes")
-        import traceback
-        logger.error(traceback.format_exc())
-        return None
     except Exception as e:
         logger.error(f"Error processing {variable} for year {year}: {e}")
         import traceback
@@ -621,33 +590,23 @@ def main() -> None:
     )
     
     try:
-        # Set up paths
-        input_dir = args.input_dir
-        output_dir = args.output_dir
-        year = args.year
-        variable = args.variable
-        
         # Process the variable
         result = process_variable_for_year(
-            variable=variable,
-            year=year,
-            filepaths=get_year_filepaths(input_dir, year, args.fn_str),
-            geo_file=args.geo_file,
-            output_dir=output_dir,
+            variable=args.variable,
+            year=args.year,
             cores=args.cores,
             memory_limit=args.memory_limit,
             overwrite=args.overwrite
         )
         
         if result:
-            logger.info(f"Successfully processed {variable} for year {year}")
+            logger.info(f"Successfully processed {args.variable} for year {args.year}")
             sys.exit(0)
         else:
-            logger.error(f"Failed to process {variable} for year {year}")
+            logger.error(f"Failed to process {args.variable} for year {args.year}")
             sys.exit(1)
     finally:
         pass
-
 
 if __name__ == "__main__":
     main() 
