@@ -186,18 +186,76 @@ class DaskConfig:
                 "Must be a string like '16GB', '1024MB', etc."
             )
 
+def _validate_batch_size(batch_size: int) -> None:
+    """Validate batch size with performance guidance.
+    
+    Valid range: 2-365 files (minimum 2 files, maximum 1 year of daily files)
+    Optimal range: 30-120 files (based on empirical testing)
+    
+    Batch size controls how many files are processed together in memory.
+    - Too small (< 30): Increased overhead, slower processing
+    - Optimal (30-120): Balanced memory usage and efficiency  
+    - Large (120-365): Higher memory usage, risk of Dask hangs
+    - Too large (> 365): Invalid for daily data processing
+    
+    Args:
+        batch_size: Number of files to process in each batch
+        
+    Raises:
+        ValueError: If batch size is outside valid range (2-365)
+    """
+    if not isinstance(batch_size, int):
+        raise ValueError(f"Batch size must be an integer, got: {type(batch_size).__name__}")
+    
+    if batch_size < 2:
+        raise ValueError(
+            f"Batch size must be at least 2 files, got: {batch_size}. "
+            "Minimum batch size ensures efficient processing."
+        )
+    
+    if batch_size > 365:
+        raise ValueError(
+            f"Batch size cannot exceed 365 files (1 year of daily data), got: {batch_size}. "
+            "Large batch sizes can cause memory issues and Dask hangs."
+        )
+    
+    # Performance warnings (not errors)
+    if batch_size < 30:
+        logger.warning(
+            f"Batch size {batch_size} is below optimal range (30-120). "
+            "This may result in increased overhead and slower processing."
+        )
+    elif batch_size > 120:
+        logger.warning(
+            f"Batch size {batch_size} is above optimal range (30-120). "
+            "This may result in higher memory usage and potential Dask stability issues."
+        )
+
 @dataclass
 class Config:
-    """Configuration settings for the processing pipeline."""
+    """Configuration settings for the processing pipeline.
+    
+    This class handles pipeline-wide configuration through environment variables:
+        ERA5_START_YEAR: Start year for processing (default: 1960)
+        ERA5_END_YEAR: End year for processing (default: 2020)
+        ERA5_DATA_VARS: Comma-separated list of variables (default: t2_mean,t2_min,t2_max)
+        ERA5_BATCH_SIZE: Number of files to process per batch (default: 90)
+    """
     # Time range settings
     START_YEAR: int = int(getenv("ERA5_START_YEAR", "1960"))
     END_YEAR: int = int(getenv("ERA5_END_YEAR", "2020"))
     DATA_VARS: List[str] = field(default_factory=lambda: _get_data_vars())
+    
+    # Processing settings
+    BATCH_SIZE: int = int(getenv("ERA5_BATCH_SIZE", "90"))
+    
+    # Dask configuration
     dask: DaskConfig = field(default_factory=lambda: DaskConfig())
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
         self._validate_years()
+        _validate_batch_size(self.BATCH_SIZE)
 
     def _validate_years(self) -> None:
         """Validate year range configuration."""

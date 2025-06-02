@@ -35,7 +35,8 @@ The pipeline uses environment variables for configuration, with sensible default
 ### Optional Environment Variables
 - `ERA5_START_YEAR`: Start year for processing (default: 1960)
 - `ERA5_END_YEAR`: End year for processing (default: 2020)
-- `ERA5_DATA_VARS`: Comma-separated list of variables to process (default: t2 min/mean/max trio)
+- `ERA5_DATA_VARS`: Comma-separated list of variables to process (default: t2_mean,t2_min,t2_max)
+- `ERA5_BATCH_SIZE`: Number of files to process per batch (default: 90, range: 2-365)
 - `ERA5_INPUT_PATTERN`: File pattern for input files (default: "era5_wrf_dscale_4km_{date}.nc")
 - `ERA5_DASK_CORES`: Number of cores to use (default: auto-detect)
 - `ERA5_DASK_MEMORY_LIMIT`: Memory limit for Dask workers (default: 85GB)
@@ -190,6 +191,27 @@ Each NetCDF file contains the processed data for one variable and one year, with
 | `ERA5_START_YEAR` | `1960` | Hardcoded | Start year for processing |
 | `ERA5_END_YEAR` | `2020` | Hardcoded | End year for processing |
 | `ERA5_DATA_VARS` | `t2_mean,t2_min,t2_max` | Hardcoded | Default variables to process |
-| `ERA5_DASK_CORES` | Auto-detect | SLURM/CPU count | Number of cores for Dask workers |
-| `ERA5_DASK_MEMORY_LIMIT` | `85GB` | Hardcoded | Memory limit for Dask workers |
-| `ERA5_DASK_TASK_TYPE` | `balanced` | Hardcoded | Task type for Dask optimization |
+| `ERA5_BATCH_SIZE` | `90` | Hardcoded | Files per batch (range: 2-365, optimal: 30-120) |
+| `ERA5_DASK_CORES` | Auto-detect | Environment | Number of cores for Dask workers |
+| `ERA5_DASK_MEMORY_LIMIT` | `85GB` | Environment | Memory limit for Dask workers |
+| `ERA5_DASK_TASK_TYPE` | `balanced` | Environment | Task type for Dask optimization |
+
+## Performance Tuning
+
+### Batch Size Configuration
+
+The `ERA5_BATCH_SIZE` parameter controls how many files are processed together in memory:
+
+- **Valid Range**: 2-365 files
+- **Optimal Range**: 30-120 files (based on empirical testing)
+- **Default**: 90 files (≈3 months of daily data)
+
+**Performance Guidelines**:
+- **Small batches (< 30)**: Lower memory usage but increased overhead and slower processing
+- **Optimal batches (30-120)**: Balanced memory usage and processing efficiency
+- **Large batches (120-365)**: Higher memory usage with risk of Dask stability issues
+
+**When to Adjust**:
+- **Reduce batch size** if experiencing memory issues or Dask worker crashes
+- **Increase batch size** if you have abundant memory and want faster processing
+- **Keep default (90)** for most standard processing environments

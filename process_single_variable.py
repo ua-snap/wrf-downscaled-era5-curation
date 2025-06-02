@@ -41,9 +41,6 @@ from utils.dask_utils import (
 )
 from utils.logging import get_logger, setup_variable_logging
 
-# CP note: batch size for file processing, I think this reduces the chance of dask hanging
-BATCH_SIZE = 90
-
 logger = get_logger(__name__)
 
 def parse_args() -> argparse.Namespace:
@@ -356,17 +353,17 @@ def process_files_in_batches(
     """
     # Calculate number of batches
     num_files = len(filepaths)
-    num_batches = (num_files + BATCH_SIZE - 1) // BATCH_SIZE 
+    num_batches = (num_files + config.BATCH_SIZE - 1) // config.BATCH_SIZE 
     
-    logger.info(f"Processing {num_files} files in {num_batches} batches of {BATCH_SIZE}")
+    logger.info(f"Processing {num_files} files in {num_batches} batches of {config.BATCH_SIZE}")
     
     # Initialize with empty dataset
     combined_ds = None
     
     # Process each batch
     for i in range(num_batches):
-        start_idx = i * BATCH_SIZE
-        end_idx = min((i + 1) * BATCH_SIZE, num_files)
+        start_idx = i * config.BATCH_SIZE
+        end_idx = min((i + 1) * config.BATCH_SIZE, num_files)
         batch_files = filepaths[start_idx:end_idx]
         
         logger.info(f"Processing batch {i+1}/{num_batches} with {len(batch_files)} files")
@@ -488,7 +485,7 @@ def process_variable_for_year(
         
         # Read input data in batches to reduce metadata contention
         filepaths = get_year_filepaths(year)
-        logger.info(f"Reading data for {variable} from {len(filepaths)} files in batches of {BATCH_SIZE}")
+        logger.info(f"Reading data for {variable} from {len(filepaths)} files in batches of {config.BATCH_SIZE}")
         ds = process_files_in_batches(filepaths, variable, chunks)
         
         # Process the variable - this is mostly I/O and simple aggregation
