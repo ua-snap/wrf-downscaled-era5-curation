@@ -9,13 +9,13 @@ Configuration is handled through environment variables:
     ERA5_INPUT_DIR: Input directory containing ERA5 data
     ERA5_OUTPUT_DIR: Output directory for processed files
     ERA5_GEO_FILE: Path to WRF geo_em file for projection information
+    ERA5_DASK_CORES: Number of cores to use (default: auto-detect)
+    ERA5_DASK_MEMORY_LIMIT: Memory limit for Dask workers (default: 16GB)
+    ERA5_DASK_TASK_TYPE: Task type for Dask workers (default: balanced)
 
 Example usage:
     # Basic usage with default configuration
     python process_single_variable.py --year 1980 --variable t2_mean 
-
-    # With performance tuning
-    python process_single_variable.py --year 1990 --variable rainnc_sum --cores 24 --memory_limit "85GB"
 
     # Force reprocessing of existing files
     python process_single_variable.py --year 1980 --variable t2_mean --overwrite
@@ -34,7 +34,7 @@ import rioxarray
 from pyproj import CRS, Transformer, Proj
 
 from era5_variables import era5_datavar_lut
-from config import data_config
+from config import data_config, config
 from utils.dask_utils import (
     get_dask_client, 
     configure_dask_memory
@@ -55,8 +55,6 @@ def parse_args() -> argparse.Namespace:
     
     Optional arguments:
         --overwrite: Force reprocessing of existing files
-        --cores: Number of cores to use (default: auto-detect)
-        --memory_limit: Memory limit for Dask workers (default: 16GB)
     
     Returns:
         Parsed arguments
@@ -82,20 +80,6 @@ def parse_args() -> argparse.Namespace:
         "--overwrite",
         action="store_true",
         help="Overwrite existing output files"
-    )
-    
-    # Dask configuration
-    parser.add_argument(
-        "--cores",
-        type=int,
-        default=None,
-        help="Number of cores to use (default: auto-detect)"
-    )
-    parser.add_argument(
-        "--memory_limit",
-        type=str,
-        default="16GB",
-        help="Memory limit for Dask workers (default: 16GB)"
     )
     
     args = parser.parse_args()
@@ -458,8 +442,6 @@ def write_output(ds: xr.Dataset, variable: str, output_file: Path) -> None:
 def process_variable_for_year(
     variable: str,
     year: int,
-    cores: Optional[int] = None,
-    memory_limit: str = "16GB",
     overwrite: bool = False
 ) -> Optional[Path]:
     """Process a single variable for a single year.
@@ -472,11 +454,11 @@ def process_variable_for_year(
     Files are processed in small batches (defined by BATCH_SIZE) to reduce metadata 
     contention on the filesystem.
     
+    Dask configuration is handled through environment variables via the config system.
+    
     Args:
         variable: Variable to process
         year: Year to process
-        cores: Number of cores to use (default: auto-detect)
-        memory_limit: Memory limit for Dask workers
         overwrite: Whether to overwrite existing output files
     
     Returns:
@@ -500,7 +482,7 @@ def process_variable_for_year(
         
         # ===== I/O PHASE =====
         logger.info("Starting I/O phase with io_bound configuration")
-        io_client, io_cluster = get_dask_client(cores, memory_limit, "io_bound")
+        io_client, io_cluster = get_dask_client(config.dask.cores, config.dask.memory_limit, "io_bound")
         
         # Get grid information
         logger.info(f"Retrieving grid information from {data_config.geo_file}")
@@ -526,7 +508,7 @@ def process_variable_for_year(
         
         # ===== COMPUTATION PHASE =====
         logger.info("Starting computation phase with balanced configuration")
-        compute_client, compute_cluster = get_dask_client(cores, memory_limit, "balanced")
+        compute_client, compute_cluster = get_dask_client(config.dask.cores, config.dask.memory_limit, "balanced")
         
         # Regrid to EPSG:3338 - computation intensive
         logger.info(f"Reprojecting data to EPSG:3338")
@@ -594,8 +576,6 @@ def main() -> None:
         result = process_variable_for_year(
             variable=args.variable,
             year=args.year,
-            cores=args.cores,
-            memory_limit=args.memory_limit,
             overwrite=args.overwrite
         )
         

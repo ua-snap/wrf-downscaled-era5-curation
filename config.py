@@ -8,7 +8,7 @@ from datetime import datetime
 import logging
 from os import getenv
 from pathlib import Path
-from typing import Dict, List, Any
+from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -106,6 +106,45 @@ class DataLocationConfig:
         file = self.get_output_file(variable, year)
         return file.exists() and file.stat().st_size > 0
 
+@dataclass(frozen=True)
+class DaskConfig:
+    """Configuration for Dask compute settings.
+    
+    This class handles Dask-specific configuration through environment variables:
+        ERA5_DASK_CORES: Number of cores to use (default: auto-detect)
+        ERA5_DASK_MEMORY_LIMIT: Memory limit for workers (default: 16GB)
+        ERA5_DASK_TASK_TYPE: Task type (default: balanced)
+    
+    The I/O phase of processing always uses io_bound task type regardless of configuration.
+    """
+    cores: Optional[int] = field(
+        default_factory=lambda: None  # Let dask_utils handle SLURM detection
+    )
+    memory_limit: str = field(
+        default_factory=lambda: getenv("ERA5_DASK_MEMORY_LIMIT", "16GB")
+    )
+    task_type: str = field(
+        default_factory=lambda: getenv("ERA5_DASK_TASK_TYPE", "balanced")
+    )
+
+    def __post_init__(self) -> None:
+        """Validate configuration after initialization."""
+        from utils.dask_utils import VALID_TASK_TYPES, validate_memory_string
+        
+        # Validate task type
+        if self.task_type not in VALID_TASK_TYPES:
+            raise ValueError(
+                f"Invalid task type: {self.task_type}. "
+                f"Must be one of: {VALID_TASK_TYPES}"
+            )
+        
+        # Validate memory format
+        if not validate_memory_string(self.memory_limit):
+            raise ValueError(
+                f"Invalid memory limit format: {self.memory_limit}. "
+                "Must be a string like '16GB', '1024MB', etc."
+            )
+
 @dataclass
 class Config:
     """Configuration settings for the processing pipeline."""
@@ -113,6 +152,7 @@ class Config:
     START_YEAR: int = int(getenv("ERA5_START_YEAR", "1960"))
     END_YEAR: int = int(getenv("ERA5_END_YEAR", "2020"))
     DATA_VARS: List[str] = field(default_factory=lambda: _get_data_vars())
+    dask: DaskConfig = field(default_factory=lambda: DaskConfig())
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""

@@ -37,6 +37,9 @@ The pipeline uses environment variables for configuration, with sensible default
 - `ERA5_END_YEAR`: End year for processing (default: 2020)
 - `ERA5_DATA_VARS`: Comma-separated list of variables to process (default: t2 min/mean/max trio)
 - `ERA5_INPUT_PATTERN`: File pattern for input files (default: "era5_wrf_dscale_4km_{date}.nc")
+- `ERA5_DASK_CORES`: Number of cores to use (default: auto-detect)
+- `ERA5_DASK_MEMORY_LIMIT`: Memory limit for Dask workers (default: 16GB)
+- `ERA5_DASK_TASK_TYPE`: Task type for Dask workers (default: balanced)
 
 ## Execution
 
@@ -88,17 +91,17 @@ This is **not** the recommended entry point to this pipeline. However, directly 
 - `--year`: Year to process (required)
 - `--variable`: Variable to process (required)
 - `--overwrite`: Overwrite existing output files (default: False)
-- `--cores`: Number of cores to use (default: auto-detect)
-- `--memory_limit`: Memory limit for Dask workers (default: 16GB)
 
-These arguments can be passed explicitly when doing development, but otherwise they are inherited from the job submission script. For example:
+Dask configuration (cores, memory limits, etc.) is handled through environment variables via the centralized config system. For example:
 
 ```bash
-python process_single_variable.py \
-    --year 1980 \
-    --variable t2_mean \
-    --cores 24 \
-    --memory_limit "85GB"
+# Basic usage
+python process_single_variable.py --year 1980 --variable t2_mean
+
+# With custom Dask configuration via environment variables
+export ERA5_DASK_CORES=12
+export ERA5_DASK_MEMORY_LIMIT="128GB"
+python process_single_variable.py --year 1980 --variable t2_mean
 ```
 
 ## Monitoring Progress
@@ -169,9 +172,9 @@ Each NetCDF file contains the processed data for one variable and one year, with
 
 ## Troubleshooting
 
-- **Processing is slow**: Adjust the chunk sizes or batch sizes or increase the CPU cores
+- **Processing is slow**: Adjust the chunk sizes or batch sizes, or increase CPU cores via `ERA5_DASK_CORES` environment variable
 - **Too many jobs time out**: Increase the time limit in the sbatch script
 - **Too many jobs in queue**: Decrease the `--max_concurrent` parameter
 - **Missing variable**: Check that the variable name is correct and exists in `era5_variables.py`
 - **RecursionError**: Increase the recursion limit in the `dask_utils` parameter module
-- **OOM killed by SLURM**: Increase memory allocation in sbatch script or reduce chunk sizes
+- **OOM killed by SLURM**: Increase memory allocation in sbatch script or reduce chunk sizes, or adjust `ERA5_DASK_MEMORY_LIMIT` environment variable

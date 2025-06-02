@@ -54,8 +54,6 @@ fi
 python process_single_variable.py \
     --year $YEAR \
     --variable $VARIABLE \
-    --cores $SLURM_CPUS_PER_TASK \
-    --memory_limit "85GB" \
     $OVERWRITE_FLAG
 # Check the exit status
 if [ $? -eq 0 ]; then

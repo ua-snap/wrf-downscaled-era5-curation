@@ -18,6 +18,26 @@ from utils.logging import get_logger
 # Get a named logger for this module
 logger = get_logger(__name__)
 
+# Task type constants
+TASK_TYPE_IO = "io_bound"
+TASK_TYPE_COMPUTE = "compute_bound"
+TASK_TYPE_BALANCED = "balanced"
+
+VALID_TASK_TYPES = [TASK_TYPE_IO, TASK_TYPE_COMPUTE, TASK_TYPE_BALANCED]
+
+def validate_memory_string(memory_limit: str) -> bool:
+    """Validate memory string format.
+    
+    Args:
+        memory_limit: Memory limit string to validate
+        
+    Returns:
+        True if format is valid, False otherwise
+    """
+    if not isinstance(memory_limit, str):
+        return False
+    pattern = r'^\d+(\.\d+)?(B|KB|MB|GB)$'
+    return bool(re.match(pattern, memory_limit.upper()))
 
 def calculate_worker_config(cores: int, task_type: str = "balanced") -> Tuple[int, int]:
     """Calculate optimal worker count and threads per worker based on core count and task type.
