@@ -10,7 +10,7 @@ Configuration is handled through environment variables:
     ERA5_OUTPUT_DIR: Output directory for processed files
     ERA5_GEO_FILE: Path to WRF geo_em file for projection information
     ERA5_DASK_CORES: Number of cores to use (default: auto-detect)
-    ERA5_DASK_MEMORY_LIMIT: Memory limit for Dask workers (default: 16GB)
+    ERA5_DASK_MEMORY_LIMIT: Memory limit for Dask workers (default: 85GB)
     ERA5_DASK_TASK_TYPE: Task type for Dask workers (default: balanced)
 
 Example usage:

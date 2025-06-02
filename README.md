@@ -38,7 +38,7 @@ The pipeline uses environment variables for configuration, with sensible default
 - `ERA5_DATA_VARS`: Comma-separated list of variables to process (default: t2 min/mean/max trio)
 - `ERA5_INPUT_PATTERN`: File pattern for input files (default: "era5_wrf_dscale_4km_{date}.nc")
 - `ERA5_DASK_CORES`: Number of cores to use (default: auto-detect)
-- `ERA5_DASK_MEMORY_LIMIT`: Memory limit for Dask workers (default: 16GB)
+- `ERA5_DASK_MEMORY_LIMIT`: Memory limit for Dask workers (default: 85GB)
 - `ERA5_DASK_TASK_TYPE`: Task type for Dask workers (default: balanced)
 
 ## Execution
@@ -178,3 +178,18 @@ Each NetCDF file contains the processed data for one variable and one year, with
 - **Missing variable**: Check that the variable name is correct and exists in `era5_variables.py`
 - **RecursionError**: Increase the recursion limit in the `dask_utils` parameter module
 - **OOM killed by SLURM**: Increase memory allocation in sbatch script or reduce chunk sizes, or adjust `ERA5_DASK_MEMORY_LIMIT` environment variable
+
+# ERA5 Pipeline Default Configuration Values
+
+| Configuration Variable | Default Value | Source of Default | Description |
+|------------------------|---------------|---------|-------------|
+| `ERA5_INPUT_DIR` | `/beegfs/CMIP6/wrf_era5/04km` | Hardcoded | Input directory containing ERA5 data |
+| `ERA5_OUTPUT_DIR` | `/beegfs/CMIP6/$USER/daily_downscaled_era5_for_rasdaman` | Hardcoded | Output directory for processed files |
+| `ERA5_GEO_FILE` | `/beegfs/CMIP6/wrf_era5/geo_em.d02.nc` | Hardcoded | Path to WRF geo_em file |
+| `ERA5_FILE_PATTERN` | `era5_wrf_dscale_4km_{date}.nc` | Hardcoded | File pattern for input files |
+| `ERA5_START_YEAR` | `1960` | Hardcoded | Start year for processing |
+| `ERA5_END_YEAR` | `2020` | Hardcoded | End year for processing |
+| `ERA5_DATA_VARS` | `t2_mean,t2_min,t2_max` | Hardcoded | Default variables to process |
+| `ERA5_DASK_CORES` | Auto-detect | SLURM/CPU count | Number of cores for Dask workers |
+| `ERA5_DASK_MEMORY_LIMIT` | `85GB` | Hardcoded | Memory limit for Dask workers |
+| `ERA5_DASK_TASK_TYPE` | `balanced` | Hardcoded | Task type for Dask optimization |

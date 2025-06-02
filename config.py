@@ -142,7 +142,7 @@ class DaskConfig:
     
     This class handles Dask-specific configuration through environment variables:
         ERA5_DASK_CORES: Number of cores to use (default: auto-detect)
-        ERA5_DASK_MEMORY_LIMIT: Memory limit for workers (default: 16GB)
+        ERA5_DASK_MEMORY_LIMIT: Memory limit for workers (default: 85GB)
         ERA5_DASK_TASK_TYPE: Task type (default: balanced)
     
     The I/O phase of processing always uses io_bound task type regardless of configuration.
@@ -158,7 +158,7 @@ class DaskConfig:
         default_factory=lambda: _parse_cores_env_var()
     )
     memory_limit: str = field(
-        default_factory=lambda: getenv("ERA5_DASK_MEMORY_LIMIT", "16GB")
+        default_factory=lambda: getenv("ERA5_DASK_MEMORY_LIMIT", "85GB")
     )
     task_type: str = field(
         default_factory=lambda: getenv("ERA5_DASK_TASK_TYPE", "balanced")
