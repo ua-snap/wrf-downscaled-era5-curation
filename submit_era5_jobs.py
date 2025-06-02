@@ -90,25 +90,30 @@ def parse_args() -> argparse.Namespace:
 
 
 def get_variables_to_process(args: argparse.Namespace) -> List[str]:
-    """Get the list of variables to process.
+    """Get the list of variables to process based on command line arguments.
     
     Args:
         args: Parsed command line arguments
-    
+        
     Returns:
         List of variable names to process
+        
+    Raises:
+        ValueError: If invalid variables are specified
     """
     if args.variables:
-        variables = [v.strip() for v in args.variables.split(",") if v.strip()]
+        variables = [v.strip() for v in args.variables.split(",")]
     else:
-        raise ValueError("No variables specified")
+        variables = config.DATA_VARS
     
     # Validate variables
     invalid_vars = [v for v in variables if v not in era5_datavar_lut]
     if invalid_vars:
-        logging.error(f"Invalid variables: {', '.join(invalid_vars)}")
-        logging.error(f"Available variables: {', '.join(list(era5_datavar_lut.keys())[:10])}...")
-        sys.exit(1)
+        available_vars = list(era5_datavar_lut.keys())
+        raise ValueError(
+            f"Invalid variables: {', '.join(invalid_vars)}. "
+            f"Available variables: {', '.join(available_vars[:10])}..."
+        )
     
     return variables
 
@@ -442,36 +447,41 @@ def main() -> None:
     
     args = parse_args()
     
-    # Wipe existing SLURM output logs for a fresh run
-    wipe_slurm_output_logs()
+    try:
+        # Wipe existing SLURM output logs for a fresh run
+        wipe_slurm_output_logs()
 
-    variables = get_variables_to_process(args)
-    
-    # Submit jobs for each variable/year combination
-    job_ids = submit_individual_jobs(
-        variables=variables,
-        start_year=args.start_year,
-        end_year=args.end_year,
-        max_concurrent=args.max_concurrent,
-        overwrite=args.overwrite
-    )
-    
-    # Wait for all jobs to complete
-    wait_for_jobs_completion()
-    
-    # Handle retries for timed-out jobs if enabled
-    if not args.no_retry:
-        timeout_jobs = detect_timed_out_jobs()
-        if timeout_jobs:
-            logger.info(f"Found {len(timeout_jobs)} timed-out jobs to retry")
-            num_retried = submit_timeout_retries(timeout_jobs, args.overwrite)
-            if num_retried > 0:
-                wait_for_jobs_completion()
-    
-    # Validate that all expected output files exist and are valid
-    validate_job_completion(variables, args.start_year, args.end_year)
-    
-    logger.info("All processing completed successfully")
+        variables = get_variables_to_process(args)
+        
+        # Submit jobs for each variable/year combination
+        job_ids = submit_individual_jobs(
+            variables=variables,
+            start_year=args.start_year,
+            end_year=args.end_year,
+            max_concurrent=args.max_concurrent,
+            overwrite=args.overwrite
+        )
+        
+        # Wait for all jobs to complete
+        wait_for_jobs_completion()
+        
+        # Handle retries for timed-out jobs if enabled
+        if not args.no_retry:
+            timeout_jobs = detect_timed_out_jobs()
+            if timeout_jobs:
+                logger.info(f"Found {len(timeout_jobs)} timed-out jobs to retry")
+                num_retried = submit_timeout_retries(timeout_jobs, args.overwrite)
+                if num_retried > 0:
+                    wait_for_jobs_completion()
+        
+        # Validate that all expected output files exist and are valid
+        validate_job_completion(variables, args.start_year, args.end_year)
+        
+        logger.info("All processing completed successfully")
+        
+    except Exception as e:
+        logger.error(f"Job submission failed: {e}")
+        sys.exit(1)
 
 
 if __name__ == "__main__":
