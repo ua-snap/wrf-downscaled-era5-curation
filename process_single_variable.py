@@ -49,36 +49,29 @@ logger = get_logger(__name__)
 def parse_args() -> argparse.Namespace:
     """Parse command line arguments.
     
-    Required arguments:
-        --year: Year to process
-        --variable: Variable name to process
-    
-    Optional arguments:
-        --overwrite: Force reprocessing of existing files
-    
     Returns:
         Parsed arguments
+        
+    Raises:
+        ValueError: If an invalid variable is provided
     """
-    parser = argparse.ArgumentParser(description=__doc__)
-    
-    # Required arguments
+    parser = argparse.ArgumentParser(
+        description="Process a single ERA5 variable for a single year"
+    )
     parser.add_argument(
-        "--year",
-        type=int,
-        required=True,
+        "--variable", 
+        required=True, 
+        help="Variable to process"
+    )
+    parser.add_argument(
+        "--year", 
+        type=int, 
+        required=True, 
         help="Year to process"
     )
     parser.add_argument(
-        "--variable",
-        type=str,
-        required=True,
-        help="Variable to process"
-    )
-    
-    # Optional arguments
-    parser.add_argument(
-        "--overwrite",
-        action="store_true",
+        "--overwrite", 
+        action="store_true", 
         help="Overwrite existing output files"
     )
     
@@ -86,10 +79,11 @@ def parse_args() -> argparse.Namespace:
     
     # Validate the variable
     if args.variable not in era5_datavar_lut:
-        logger.error(f"Variable '{args.variable}' not found in ERA5 variable lookup table")
         available_vars = list(era5_datavar_lut.keys())
-        logger.error(f"Available variables: {', '.join(available_vars[:10])}...")
-        sys.exit(1)
+        raise ValueError(
+            f"Variable '{args.variable}' not found in ERA5 variable lookup table. "
+            f"Available variables: {', '.join(available_vars[:10])}..."
+        )
     
     return args
 
@@ -442,7 +436,7 @@ def process_variable_for_year(
     variable: str,
     year: int,
     overwrite: bool = False
-) -> Optional[Path]:
+) -> Path:
     """Process a single variable for a single year.
     
     This function processes one ERA5 variable for one year, using Dask for
@@ -461,13 +455,18 @@ def process_variable_for_year(
         overwrite: Whether to overwrite existing output files
     
     Returns:
-        Path to the output file if successful, None otherwise
+        Path to the output file if successful
+        
+    Raises:
+        FileNotFoundError: If required input files are not found
+        RuntimeError: If processing fails due to computation or I/O errors
+        ValueError: If invalid parameters are provided
     """
     # Check if output already exists
     exists, output_file = check_output_exists(variable, year)
     if exists and not overwrite:
         logger.info(f"Output file exists, skipping (overwrite=False)")
-        return None
+        raise RuntimeError(f"Output file {output_file} already exists and overwrite=False")
     
     # Initialize client variables outside try block
     io_client = io_cluster = compute_client = compute_cluster = None
@@ -529,7 +528,7 @@ def process_variable_for_year(
         logger.error(f"Error processing {variable} for year {year}: {e}")
         import traceback
         logger.error(traceback.format_exc())
-        return None
+        raise RuntimeError(f"Processing failed for {variable} year {year}: {e}") from e
     
     finally:
         # Close the clients and clusters if they were created
@@ -578,14 +577,14 @@ def main() -> None:
             overwrite=args.overwrite
         )
         
-        if result:
-            logger.info(f"Successfully processed {args.variable} for year {args.year}")
-            sys.exit(0)
-        else:
-            logger.error(f"Failed to process {args.variable} for year {args.year}")
-            sys.exit(1)
-    finally:
-        pass
+        logger.info(f"Successfully processed {args.variable} for year {args.year}")
+        logger.info(f"Output written to: {result}")
+        sys.exit(0)
+        
+    except Exception as e:
+        logger.error(f"Failed to process {args.variable} for year {args.year}: {e}")
+        sys.exit(1)
+
 
 if __name__ == "__main__":
     main() 
