@@ -295,9 +295,8 @@ def process_variable(ds: xr.Dataset, variable: str) -> xr.Dataset:
     source_var = var_info["var_id"]
     agg_func = var_info["agg_func"]
     
-    # Apply the aggregation function to resample from hourly to daily
-    logger.info(f"Resampling variable {variable} ({source_var}) to daily frequency")
-    
+
+    logger.info(f"Resampling variable {variable} ({source_var}) to daily frequency")    
     # Extract the variable data array and resample
     da = ds[source_var]
     # Resample to daily frequency and apply the aggregation function

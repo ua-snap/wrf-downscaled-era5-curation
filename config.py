@@ -12,6 +12,36 @@ from typing import Dict, List, Any, Optional
 
 logger = logging.getLogger(__name__)
 
+def _parse_cores_env_var() -> Optional[int]:
+    """Parse ERA5_DASK_CORES environment variable with validation.
+    
+    Returns:
+        int: Number of cores if ERA5_DASK_CORES is set and valid
+        None: If ERA5_DASK_CORES is not set (triggers auto-detection)
+        
+    Raises:
+        ValueError: If ERA5_DASK_CORES is set but invalid
+    """
+    cores_str = getenv("ERA5_DASK_CORES")
+    if cores_str is None:
+        return None
+    
+    try:
+        cores = int(cores_str)
+        if cores <= 0:
+            raise ValueError(f"ERA5_DASK_CORES must be positive, got: {cores}")
+        return cores
+    except ValueError as e:
+        raise ValueError(f"Invalid ERA5_DASK_CORES value '{cores_str}': {e}")
+
+def _get_data_vars() -> List[str]:
+    """Get data variables from environment or default to a subset of available variables."""
+    env_vars = getenv("ERA5_DATA_VARS", "")
+    if env_vars:
+        return [x.strip() for x in env_vars.split(",") if x.strip()]
+    else:
+        return ["t2_mean", "t2_min", "t2_max"]
+
 # Using a frozen dataclass to ensure that the config is immutable
 @dataclass(frozen=True)
 class DataLocationConfig:
@@ -117,8 +147,15 @@ class DaskConfig:
     
     The I/O phase of processing always uses io_bound task type regardless of configuration.
     """
+    # ERA5_DASK_CORES environment variable takes precedence over auto-detection.
+    # Configuration pathway:
+    # 1. If ERA5_DASK_CORES is set: use that value (after validation)
+    # 2. If ERA5_DASK_CORES is not set: use None (triggers auto-detection in dask_utils)
+    # 3. dask_utils.get_dask_client() handles auto-detection:
+    #    - First tries SLURM_CPUS_PER_TASK if in SLURM environment
+    #    - Falls back to os.cpu_count() if no SLURM allocation
     cores: Optional[int] = field(
-        default_factory=lambda: None  # Let dask_utils handle SLURM detection
+        default_factory=lambda: _parse_cores_env_var()
     )
     memory_limit: str = field(
         default_factory=lambda: getenv("ERA5_DASK_MEMORY_LIMIT", "16GB")
@@ -130,6 +167,10 @@ class DaskConfig:
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
         from utils.dask_utils import VALID_TASK_TYPES, validate_memory_string
+        
+        # Validate cores
+        if self.cores is not None and self.cores <= 0:
+            raise ValueError(f"Cores must be positive, got: {self.cores}")
         
         # Validate task type
         if self.task_type not in VALID_TASK_TYPES:
@@ -165,14 +206,6 @@ class Config:
             raise ValueError(f"START_YEAR must be between 1950 and {current_year}")
         if not self.START_YEAR <= self.END_YEAR <= current_year:
             raise ValueError(f"END_YEAR must be between START_YEAR and {current_year}")
-
-def _get_data_vars() -> List[str]:
-    """Get data variables from environment or default to a subset of available variables."""
-    env_vars = getenv("ERA5_DATA_VARS", "")
-    if env_vars:
-        return [x.strip() for x in env_vars.split(",") if x.strip()]
-    else:
-        return ["t2_mean", "t2_min", "t2_max"]
 
 # Create global instances
 # In production, always require environment variables
