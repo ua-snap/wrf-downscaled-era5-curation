@@ -142,8 +142,8 @@ class DaskConfig:
     
     This class handles Dask-specific configuration through environment variables:
         ERA5_DASK_CORES: Number of cores to use (default: auto-detect)
-        ERA5_DASK_MEMORY_LIMIT: Memory limit for workers (default: 85GB)
-        ERA5_DASK_TASK_TYPE: Task type (default: balanced)
+        ERA5_DASK_MEMORY_LIMIT: Memory limit for workers (default: 64GB)
+        ERA5_DASK_TASK_TYPE: Task type (default: io_bound)
     """
     # ERA5_DASK_CORES environment variable takes precedence over auto-detection.
     # Configuration pathway:
@@ -156,10 +156,10 @@ class DaskConfig:
         default_factory=lambda: _parse_cores_env_var()
     )
     memory_limit: str = field(
-        default_factory=lambda: getenv("ERA5_DASK_MEMORY_LIMIT", "85GB")
+        default_factory=lambda: getenv("ERA5_DASK_MEMORY_LIMIT", "64GB")
     )
     task_type: str = field(
-        default_factory=lambda: getenv("ERA5_DASK_TASK_TYPE", "balanced")
+        default_factory=lambda: getenv("ERA5_DASK_TASK_TYPE", "io_bound")
     )
 
     def __post_init__(self) -> None:
@@ -190,9 +190,10 @@ def _validate_batch_size(batch_size: int) -> None:
     Valid range: 2-365 files (minimum 2 files, maximum 1 year of daily files)
     
     Batch size controls how many files are processed together in memory.
-    For current 2D variables, larger batch sizes (300-365) perform best due to 
-    reduced metadata overhead. Smaller batch sizes may be needed for future 
-    3D variables with additional dimensions.
+    Performance profiling shows that medium batch sizes (90-180) perform best,
+    with 90 files being optimal for most ERA5 workloads. Larger batch sizes 
+    (300-365) can create overhead, while smaller batch sizes may be needed 
+    for future 3D variables with additional dimensions.
     
     Args:
         batch_size: Number of files to process in each batch
@@ -223,7 +224,7 @@ class Config:
         ERA5_START_YEAR: Start year for processing (default: 1960)
         ERA5_END_YEAR: End year for processing (default: 2020)
         ERA5_DATA_VARS: Comma-separated list of variables (default: t2_mean,t2_min,t2_max)
-        ERA5_BATCH_SIZE: Number of files to process per batch (default: 365)
+        ERA5_BATCH_SIZE: Number of files to process per batch (default: 90)
     """
     # Time range settings
     START_YEAR: int = int(getenv("ERA5_START_YEAR", "1960"))
@@ -231,7 +232,7 @@ class Config:
     DATA_VARS: List[str] = field(default_factory=lambda: _get_data_vars())
     
     # Processing settings
-    BATCH_SIZE: int = int(getenv("ERA5_BATCH_SIZE", "365"))
+    BATCH_SIZE: int = int(getenv("ERA5_BATCH_SIZE", "90"))
     
     # Dask configuration
     dask: DaskConfig = field(default_factory=lambda: DaskConfig())

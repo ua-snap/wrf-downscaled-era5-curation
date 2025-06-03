@@ -116,20 +116,20 @@ def calculate_worker_memory(total_memory_gb: float, n_workers: int, task_type: s
 
 
 def get_dask_client(cores: Optional[int] = None, 
-                   memory_limit: str = "16GB", 
-                   task_type: str = "balanced") -> Tuple[Client, LocalCluster]:
+                   memory_limit: str = "64GB", 
+                   task_type: str = "io_bound") -> Tuple[Client, LocalCluster]:
     """Set up a Dask LocalCluster and Client optimized for specific task types.
     
     Automatically determines optimal worker count, threads per worker, and
     memory allocation based on available resources and the type of task:
-    - "io_bound": Optimized for I/O operations (more workers, less memory per worker)
+    - "io_bound": Optimized for I/O operations (more workers, less memory per worker) - DEFAULT
     - "compute_bound": Optimized for computation (fewer workers, more threads and memory)
     - "balanced": Balanced configuration for mixed workloads
     
     Args:
         cores: Number of cores to use (None for auto-detect)
         memory_limit: Total memory limit across all workers
-        task_type: Type of task being performed
+        task_type: Type of task being performed (default: io_bound)
     
     Returns:
         Tuple of (Client, LocalCluster)
