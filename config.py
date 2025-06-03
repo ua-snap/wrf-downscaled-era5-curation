@@ -8,7 +8,7 @@ from datetime import datetime
 import logging
 from os import getenv
 from pathlib import Path
-from typing import Dict, List, Any, Optional
+from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
@@ -190,13 +190,11 @@ def _validate_batch_size(batch_size: int) -> None:
     """Validate batch size with performance guidance.
     
     Valid range: 2-365 files (minimum 2 files, maximum 1 year of daily files)
-    Optimal range: 30-120 files (based on empirical testing)
     
     Batch size controls how many files are processed together in memory.
-    - Too small (< 30): Increased overhead, slower processing
-    - Optimal (30-120): Balanced memory usage and efficiency  
-    - Large (120-365): Higher memory usage, risk of Dask hangs
-    - Too large (> 365): Invalid for daily data processing
+    For current 2D variables, larger batch sizes (300-365) perform best due to 
+    reduced metadata overhead. Smaller batch sizes may be needed for future 
+    3D variables with additional dimensions.
     
     Args:
         batch_size: Number of files to process in each batch
@@ -218,18 +216,6 @@ def _validate_batch_size(batch_size: int) -> None:
             f"Batch size cannot exceed 365 files (1 year of daily data), got: {batch_size}. "
             "Large batch sizes can cause memory issues and Dask hangs."
         )
-    
-    # Performance warnings (not errors)
-    if batch_size < 30:
-        logger.warning(
-            f"Batch size {batch_size} is below optimal range (30-120). "
-            "This may result in increased overhead and slower processing."
-        )
-    elif batch_size > 120:
-        logger.warning(
-            f"Batch size {batch_size} is above optimal range (30-120). "
-            "This may result in higher memory usage and potential Dask stability issues."
-        )
 
 @dataclass
 class Config:
@@ -239,7 +225,7 @@ class Config:
         ERA5_START_YEAR: Start year for processing (default: 1960)
         ERA5_END_YEAR: End year for processing (default: 2020)
         ERA5_DATA_VARS: Comma-separated list of variables (default: t2_mean,t2_min,t2_max)
-        ERA5_BATCH_SIZE: Number of files to process per batch (default: 90)
+        ERA5_BATCH_SIZE: Number of files to process per batch (default: 365)
     """
     # Time range settings
     START_YEAR: int = int(getenv("ERA5_START_YEAR", "1960"))
@@ -247,7 +233,7 @@ class Config:
     DATA_VARS: List[str] = field(default_factory=lambda: _get_data_vars())
     
     # Processing settings
-    BATCH_SIZE: int = int(getenv("ERA5_BATCH_SIZE", "90"))
+    BATCH_SIZE: int = int(getenv("ERA5_BATCH_SIZE", "365"))
     
     # Dask configuration
     dask: DaskConfig = field(default_factory=lambda: DaskConfig())
