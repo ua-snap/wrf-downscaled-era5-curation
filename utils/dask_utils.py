@@ -56,7 +56,7 @@ def calculate_worker_config(cores: int, task_type: str = "balanced") -> Tuple[in
     """
     if task_type == "io_bound":
         # More workers with fewer threads for I/O operations
-        worker_count = min(cores, 12)  # Up to 12 workers, but no more than cores
+        worker_count = min(cores, 24)  # Up to 12 workers, but no more than cores
         threads_per_worker = max(1, cores // worker_count)
     elif task_type == "compute_bound":
         # Fewer workers with more threads for computation
@@ -93,14 +93,14 @@ def calculate_worker_memory(total_memory_gb: float, n_workers: int, task_type: s
     # Calculate memory based on task type
     if task_type == "io_bound":
         # I/O tasks typically need less memory
-        worker_fraction = 0.7  # Use 70% of available memory
-        memory_factor = 0.8    # Each worker gets less memory
+        worker_fraction = 0.5  # Use 50% of available memory
+        memory_factor = 0.7    # Each worker gets less memory
     elif task_type == "compute_bound":
         # Compute tasks may need more memory
         worker_fraction = 0.8  # Use 80% of available memory
-        memory_factor = 1.2    # Each worker gets more memory
+        memory_factor = 1.3    # Each worker gets more memory
     else:  # balanced
-        worker_fraction = 0.75  # Use 75% of available memory
+        worker_fraction = 0.65  # Use 65% of available memory
         memory_factor = 1.0    # Standard memory allocation
     
     # Calculate memory per worker with task-specific adjustments
