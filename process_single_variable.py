@@ -466,7 +466,7 @@ def process_variable_for_year(
         raise RuntimeError(f"Output file {output_file} already exists and overwrite=False")
     
     # Initialize client variables outside try block
-    io_client = io_cluster = compute_client = compute_cluster = None
+    client = cluster = None
     
     try:
         # Configure Dask memory settings
@@ -475,9 +475,9 @@ def process_variable_for_year(
         # Get optimal chunk sizes for this variable
         chunks = get_variable_chunks(variable)
         
-        # ===== I/O PHASE =====
-        logger.info("Starting I/O phase with io_bound configuration")
-        io_client, io_cluster = get_dask_client(config.dask.cores, config.dask.memory_limit, "io_bound")
+        # Create Dask client with configured task type
+        logger.info(f"Creating Dask client with {config.dask.task_type} configuration")
+        client, cluster = get_dask_client(config.dask.cores, config.dask.memory_limit, config.dask.task_type)
         
         # Get grid information
         logger.info(f"Retrieving grid information from {data_config.geo_file}")
@@ -494,16 +494,7 @@ def process_variable_for_year(
         
         # Clean up intermediate data to free memory
         del ds
-        io_client.run(lambda: gc.collect())  # Trigger garbage collection on workers
-        
-        # Close I/O client
-        logger.info("Closing I/O phase Dask client")
-        io_client.close()
-        io_cluster.close()
-        
-        # ===== COMPUTATION PHASE =====
-        logger.info("Starting computation phase with balanced configuration")
-        compute_client, compute_cluster = get_dask_client(config.dask.cores, config.dask.memory_limit, "balanced")
+        client.run(lambda: gc.collect())  # Trigger garbage collection on workers
         
         # Regrid to EPSG:3338 - computation intensive
         logger.info(f"Reprojecting data to EPSG:3338")
@@ -511,13 +502,13 @@ def process_variable_for_year(
         
         # Clean up intermediate data to free memory
         del processed_ds
-        compute_client.run(lambda: gc.collect())  # Trigger garbage collection on workers
+        client.run(lambda: gc.collect())  # Trigger garbage collection on workers
         
         write_output(reprojected_ds, variable, output_file)
         
         # Clean up final data
         del reprojected_ds
-        compute_client.run(lambda: gc.collect())  # Trigger garbage collection on workers
+        client.run(lambda: gc.collect())  # Trigger garbage collection on workers
         
         return output_file
     
@@ -528,30 +519,19 @@ def process_variable_for_year(
         raise RuntimeError(f"Processing failed for {variable} year {year}: {e}") from e
     
     finally:
-        # Close the clients and clusters if they were created
-        if io_client is not None:
+        # Close the client and cluster if they were created
+        if client is not None:
             try:
-                io_client.close()
+                client.close()
             except:
                 pass
-        if io_cluster is not None:
+        if cluster is not None:
             try:
-                io_cluster.close()
-            except:
-                pass
-        
-        if compute_client is not None:
-            try:
-                compute_client.close()
-            except:
-                pass
-        if compute_cluster is not None:
-            try:
-                compute_cluster.close()
+                cluster.close()
             except:
                 pass
             
-        logger.info(f"Closed all Dask clients and clusters")
+        logger.info(f"Closed Dask client and cluster")
 
 
 def main() -> None:

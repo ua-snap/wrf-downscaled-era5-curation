@@ -144,8 +144,6 @@ class DaskConfig:
         ERA5_DASK_CORES: Number of cores to use (default: auto-detect)
         ERA5_DASK_MEMORY_LIMIT: Memory limit for workers (default: 85GB)
         ERA5_DASK_TASK_TYPE: Task type (default: balanced)
-    
-    The I/O phase of processing always uses io_bound task type regardless of configuration.
     """
     # ERA5_DASK_CORES environment variable takes precedence over auto-detection.
     # Configuration pathway:
