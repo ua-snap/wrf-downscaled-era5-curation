@@ -24,7 +24,6 @@ Example usage:
 """
 
 import argparse
-import logging
 import os
 import re
 import subprocess
@@ -53,8 +52,6 @@ def parse_args() -> argparse.Namespace:
         type=str,
         help="Comma-separated list of variables to process"
     )
-    
-    # Year range
     parser.add_argument(
         "--start_year",
         type=int,
@@ -156,7 +153,7 @@ def submit_individual_jobs(
         Dictionary mapping variable names to lists of submitted job IDs
     """
     job_ids = {}
-    wait_time = 1  # seconds between job submissions
+    wait_time = 0.5  # seconds between job submissions
     
     def wait_for_available_slots():
         """Wait until there are available job slots."""
@@ -279,7 +276,7 @@ def wait_for_jobs_completion() -> None:
                 logger.info(f"Still waiting for {current_jobs} jobs to complete (elapsed: {elapsed_minutes:.1f} minutes)")
                 last_log_time = current_time
             
-            time.sleep(30)  # Check every 30 seconds
+            time.sleep(10)  # Check every 10 seconds
             
         except subprocess.CalledProcessError as e:
             logger.warning(f"Error checking job status: {e}")
