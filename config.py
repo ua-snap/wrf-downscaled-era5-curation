@@ -142,8 +142,10 @@ class DaskConfig:
     
     This class handles Dask-specific configuration through environment variables:
         ERA5_DASK_CORES: Number of cores to use (default: auto-detect)
-        ERA5_DASK_MEMORY_LIMIT: Memory limit for workers (default: 64GB)
         ERA5_DASK_TASK_TYPE: Task type (default: io_bound)
+        
+    Memory is automatically detected from SLURM allocation (90% of SLURM_MEM_PER_NODE)
+    or defaults to 64GB for non-SLURM environments.
     """
     # ERA5_DASK_CORES environment variable takes precedence over auto-detection.
     # Configuration pathway:
@@ -155,16 +157,13 @@ class DaskConfig:
     cores: Optional[int] = field(
         default_factory=lambda: _parse_cores_env_var()
     )
-    memory_limit: str = field(
-        default_factory=lambda: getenv("ERA5_DASK_MEMORY_LIMIT", "64GB")
-    )
     task_type: str = field(
         default_factory=lambda: getenv("ERA5_DASK_TASK_TYPE", "io_bound")
     )
 
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
-        from utils.dask_utils import VALID_TASK_TYPES, validate_memory_string
+        from utils.dask_utils import VALID_TASK_TYPES
         
         # Validate cores
         if self.cores is not None and self.cores <= 0:
@@ -175,13 +174,6 @@ class DaskConfig:
             raise ValueError(
                 f"Invalid task type: {self.task_type}. "
                 f"Must be one of: {VALID_TASK_TYPES}"
-            )
-        
-        # Validate memory format
-        if not validate_memory_string(self.memory_limit):
-            raise ValueError(
-                f"Invalid memory limit format: {self.memory_limit}. "
-                "Must be a string like '16GB', '1024MB', etc."
             )
 
 def _validate_batch_size(batch_size: int) -> None:

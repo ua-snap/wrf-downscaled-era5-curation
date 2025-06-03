@@ -56,8 +56,8 @@ def calculate_worker_config(cores: int, task_type: str = "balanced") -> Tuple[in
     """
     if task_type == "io_bound":
         # More workers with fewer threads for I/O operations
-        worker_count = min(cores, 24)  # Up to 12 workers, but no more than cores
-        threads_per_worker = max(1, cores // worker_count)
+        worker_count = min(cores, 12)  # 12 workers × 2 threads each @ 24 cores
+        threads_per_worker = max(2, cores // worker_count)
     elif task_type == "compute_bound":
         # Fewer workers with more threads for computation
         worker_count = max(4, cores // 4)  # At least 4 workers
@@ -116,7 +116,6 @@ def calculate_worker_memory(total_memory_gb: float, n_workers: int, task_type: s
 
 
 def get_dask_client(cores: Optional[int] = None, 
-                   memory_limit: str = "64GB", 
                    task_type: str = "io_bound") -> Tuple[Client, LocalCluster]:
     """Set up a Dask LocalCluster and Client optimized for specific task types.
     
@@ -126,14 +125,26 @@ def get_dask_client(cores: Optional[int] = None,
     - "compute_bound": Optimized for computation (fewer workers, more threads and memory)
     - "balanced": Balanced configuration for mixed workloads
     
+    Memory is automatically detected from SLURM allocation (90% of SLURM_MEM_PER_NODE)
+    or defaults to 64GB for non-SLURM environments.
+    
     Args:
         cores: Number of cores to use (None for auto-detect)
-        memory_limit: Total memory limit across all workers
         task_type: Type of task being performed (default: io_bound)
     
     Returns:
         Tuple of (Client, LocalCluster)
     """
+    # Auto-detect memory from SLURM if available
+    memory_limit = "64GB"  # Default fallback
+    if "SLURM_MEM_PER_NODE" in os.environ:
+        slurm_mem_mb = int(os.environ["SLURM_MEM_PER_NODE"])
+        slurm_mem_gb = slurm_mem_mb / 1024
+        memory_limit = f"{int(slurm_mem_gb * 0.9)}GB"  # Use 90% of SLURM allocation
+        logger.info(f"Auto-detected memory from SLURM: {memory_limit} (90% of {slurm_mem_gb:.1f}GB)")
+    else:
+        logger.info(f"Using default memory limit: {memory_limit}")
+    
     # For SLURM jobs, use the allocated resources
     if "SLURM_JOB_ID" in os.environ:
         # If SLURM_CPUS_PER_TASK is set, use that for the number of cores
@@ -141,12 +152,6 @@ def get_dask_client(cores: Optional[int] = None,
             slurm_cores = int(os.environ["SLURM_CPUS_PER_TASK"])
             cores = slurm_cores if cores is None else min(cores, slurm_cores)
             logger.info(f"Using {cores} cores from SLURM allocation")
-        
-        # Check for memory allocation in SLURM
-        if "SLURM_MEM_PER_NODE" in os.environ:
-            slurm_mem_mb = int(os.environ["SLURM_MEM_PER_NODE"])
-            slurm_mem_gb = slurm_mem_mb / 1024
-            logger.info(f"SLURM memory allocation: {slurm_mem_gb:.1f}GB")
     
     # If cores is still None, use CPU count
     if cores is None:

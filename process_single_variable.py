@@ -24,7 +24,7 @@ Example usage:
 import argparse
 import sys
 from pathlib import Path
-from typing import Dict, List, Any, Optional, Tuple, Union
+from typing import Dict, List, Any, Tuple, Union
 import time
 import gc
 
@@ -477,7 +477,7 @@ def process_variable_for_year(
         
         # Create Dask client with configured task type
         logger.info(f"Creating Dask client with {config.dask.task_type} configuration")
-        client, cluster = get_dask_client(config.dask.cores, config.dask.memory_limit, config.dask.task_type)
+        client, cluster = get_dask_client(config.dask.cores, config.dask.task_type)
         
         # Get grid information
         logger.info(f"Retrieving grid information from {data_config.geo_file}")
