@@ -8,10 +8,10 @@ aggregation function, regrids to EPSG:3338, and writes the output to a NetCDF fi
 Configuration is handled through environment variables:
     ERA5_INPUT_DIR: Input directory containing ERA5 data
     ERA5_OUTPUT_DIR: Output directory for processed files
-    ERA5_GEO_FILE: Path to WRF geo_em file for projection information
-    ERA5_DASK_CORES: Number of cores to use (default: auto-detect)
-    ERA5_DASK_MEMORY_LIMIT: Memory limit for Dask workers (default: 85GB)
-    ERA5_DASK_TASK_TYPE: Task type for Dask workers (default: balanced)
+    ERA5_DASK_CORES: Number of cores to use (default: auto-detect via config.py and dask_utils.py)
+    ERA5_DASK_TASK_TYPE: Task type for Dask workers (default: io_bound, set in config.py)
+    Note: Dask total memory is auto-configured by dask_utils.py based on SLURM
+    allocation or an internal fallback; it is not set by a dedicated env variable here.
 
 Example usage:
     # Basic usage with default configuration

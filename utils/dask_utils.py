@@ -119,14 +119,14 @@ def get_dask_client(cores: Optional[int] = None,
                    task_type: str = "io_bound") -> Tuple[Client, LocalCluster]:
     """Set up a Dask LocalCluster and Client optimized for specific task types.
     
-    Automatically determines optimal worker count, threads per worker, and
-    memory allocation based on available resources and the type of task:
-    - "io_bound": Optimized for I/O operations (more workers, less memory per worker) - DEFAULT
-    - "compute_bound": Optimized for computation (fewer workers, more threads and memory)
-    - "balanced": Balanced configuration for mixed workloads
+    Automatically determines optimal worker count and threads per worker based on
+    available resources and the type of task (`io_bound`, `compute_bound`, `balanced`).
+    The choice of task type only affects the number of workers and threads, not
+    the memory allocation.
     
-    Memory is automatically detected from SLURM allocation (90% of SLURM_MEM_PER_NODE)
-    or defaults to 64GB for non-SLURM environments.
+    Memory is automatically detected from SLURM allocation (using 90% of
+    SLURM_MEM_PER_NODE) or defaults to 64GB for non-SLURM environments. Dask
+    workers are always allocated 90% of this available memory.
     
     Args:
         cores: Number of cores to use (None for auto-detect)
@@ -140,8 +140,9 @@ def get_dask_client(cores: Optional[int] = None,
     if "SLURM_MEM_PER_NODE" in os.environ:
         slurm_mem_mb = int(os.environ["SLURM_MEM_PER_NODE"])
         slurm_mem_gb = slurm_mem_mb / 1024
-        memory_limit = f"{int(slurm_mem_gb * 0.9)}GB"  # Use 90% of SLURM allocation
-        logger.info(f"Auto-detected memory from SLURM: {memory_limit} (90% of {slurm_mem_gb:.1f}GB)")
+        # Use 100% of SLURM allocation as the total available memory
+        memory_limit = f"{int(slurm_mem_gb)}GB"
+        logger.info(f"Detected memory from SLURM: {memory_limit}")
     else:
         logger.info(f"Using default memory limit: {memory_limit}")
     
@@ -174,8 +175,12 @@ def get_dask_client(cores: Optional[int] = None,
     else:
         memory_gb = float(memory_limit) / (1024 * 1024 * 1024)
     
-    # Calculate memory per worker
-    memory_per_worker = calculate_worker_memory(memory_gb, n_workers, task_type)
+    # Define a single, universal memory fraction for the Dask worker pool
+    DASK_MEMORY_FRACTION = 0.90
+    worker_pool_memory_gb = memory_gb * DASK_MEMORY_FRACTION
+    
+    # Calculate memory per worker based on the fixed fraction
+    memory_per_worker = f"{int(worker_pool_memory_gb / n_workers)}GB"
     
     # Set up a local cluster with appropriate resources
     cluster = LocalCluster(

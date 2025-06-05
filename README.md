@@ -30,17 +30,46 @@ The pipeline uses environment variables for configuration, with sensible default
 ### Required Environment Variables
 - `ERA5_INPUT_DIR`: Input directory containing ERA5 data (default: "/beegfs/CMIP6/wrf_era5/04km")
 - `ERA5_OUTPUT_DIR`: Output directory for processed files (default: "/beegfs/CMIP6/cparr4/daily_downscaled_era5_for_rasdaman")
-- `ERA5_GEO_FILE`: Path to WRF geo_em file (default: "/beegfs/CMIP6/wrf_era5/geo_em.d02.nc")
+
+### Derived Configuration Path
+**WRF `geo_em` File Path**
+
+The path to the WRF projection file (`geo_em.d02.nc`) is no longer configured via an environment variable. It is now automatically derived from the `ERA5_INPUT_DIR` path.
+
+**Assumption:** The pipeline critically assumes that the `geo_em.d02.nc` file is located exactly one directory level above the `ERA5_INPUT_DIR`.
+
+For example, if `ERA5_INPUT_DIR` is set to `/beegfs/CMIP6/wrf_era5/04km`, the pipeline will automatically look for the geo file at `/beegfs/CMIP6/wrf_era5/geo_em.d02.nc`. The processing will fail if this file is not found at the derived location.
+
+**Input File Naming Convention**
+
+Similarly, the pattern for input data files is no longer configurable and is assumed to be `era5_wrf_dscale_4km_{date}.nc`, where `{date}` is the date string (e.g., `1980-01-01`).
 
 ### Optional Environment Variables
 - `ERA5_START_YEAR`: Start year for processing (default: 1960)
 - `ERA5_END_YEAR`: End year for processing (default: 2020)
 - `ERA5_DATA_VARS`: Comma-separated list of variables to process (default: t2_mean,t2_min,t2_max)
 - `ERA5_BATCH_SIZE`: Number of files to process per batch (default: 90, range: 2-365)
-- `ERA5_INPUT_PATTERN`: File pattern for input files (default: "era5_wrf_dscale_4km_{date}.nc")
-- `ERA5_DASK_CORES`: Number of cores to use (default: auto-detect)
-- `ERA5_DASK_MEMORY_LIMIT`: Memory limit for Dask workers (default: 64GB)
-- `ERA5_DASK_TASK_TYPE`: Task type for Dask workers (default: io_bound)
+- `ERA5_DASK_CORES`: Number of cores Dask should use. If set, this overrides auto-detection. Auto-detection prioritizes `SLURM_CPUS_PER_TASK` if in a SLURM environment, otherwise `os.cpu_count()`.
+- `ERA5_DASK_TASK_TYPE`: Task type for Dask worker optimization (default: `io_bound`, set in `config.py`). Can be set to `io_bound`, `compute_bound`, or `balanced`. This environment variable overrides the default.
+
+### Dask Configuration Details
+
+Understanding how Dask is configured for parallelism and memory is crucial for efficient processing.
+
+**Cores:**
+The number of cores Dask utilizes is determined in the following order of precedence:
+1.  The `ERA5_DASK_CORES` environment variable, if set.
+2.  The `SLURM_CPUS_PER_TASK` environment variable, if the job is running within a SLURM environment.
+3.  The total number of CPU cores available on the node, as reported by `os.cpu_count()`.
+
+**Memory:**
+The total memory available to the Dask `LocalCluster` is determined in two steps:
+1.  **Total Available Memory**: The pipeline first determines the total memory available to the job. This is either the full amount allocated by SLURM (via the `SLURM_MEM_PER_NODE` environment variable) or a fallback of "64GB" if running outside a SLURM environment.
+2.  **Dask Worker Pool Allocation**: The Dask worker pool is **always** configured to use **90%** of this total available memory. The remaining 10% is reserved as a safety buffer for the operating system and other overhead.
+
+This 90% fraction is a fixed heuristic and does not change based on the `task_type`. It is **critical** to ensure that the memory requested from SLURM (via `#SBATCH --mem`) is sufficient. For a robust setup, it is recommended to request at least 96GB.
+
+The `ERA5_DASK_TASK_TYPE` (defaulting to `io_bound`) influences how Dask allocates workers and threads based on the available cores, but it does not affect memory allocation.
 
 ## Execution
 
@@ -101,7 +130,9 @@ python process_single_variable.py --year 1980 --variable t2_mean
 
 # With custom Dask configuration via environment variables
 export ERA5_DASK_CORES=12
-export ERA5_DASK_MEMORY_LIMIT="64GB"
+# Note: ERA5_DASK_MEMORY_LIMIT is not used by the current Dask setup.
+# Dask memory is auto-configured based on SLURM allocation or an internal default.
+# Ensure your SLURM --mem request is ~15-25% higher than Dask's expected usage.
 python process_single_variable.py --year 1980 --variable t2_mean
 ```
 
@@ -178,7 +209,7 @@ Each NetCDF file contains the processed data for one variable and one year, with
 - **Too many jobs in queue**: Decrease the `--max_concurrent` parameter
 - **Missing variable**: Check that the variable name is correct and exists in `era5_variables.py`
 - **RecursionError**: Increase the recursion limit in the `dask_utils` parameter module
-- **OOM killed by SLURM**: Increase memory allocation in sbatch script or reduce chunk sizes, or adjust `ERA5_DASK_MEMORY_LIMIT` environment variable
+- **OOM killed by SLURM**: Increase memory allocation in the sbatch script (`#SBATCH --mem`). Dask automatically uses a portion (typically 90%) of this. Ensure the SLURM allocation is sufficiently higher (15-25%) than Dask's expected peak usage. Reducing batch size (`ERA5_BATCH_SIZE`) or, for very large datasets, considering a reduction in Dask cores (`ERA5_DASK_CORES`) to decrease memory pressure per core might also help.
 
 # ERA5 Pipeline Default Configuration Values
 
@@ -186,15 +217,12 @@ Each NetCDF file contains the processed data for one variable and one year, with
 |------------------------|---------------|---------|-------------|
 | `ERA5_INPUT_DIR` | `/beegfs/CMIP6/wrf_era5/04km` | Hardcoded | Input directory containing ERA5 data |
 | `ERA5_OUTPUT_DIR` | `/beegfs/CMIP6/$USER/daily_downscaled_era5_for_rasdaman` | Hardcoded | Output directory for processed files |
-| `ERA5_GEO_FILE` | `/beegfs/CMIP6/wrf_era5/geo_em.d02.nc` | Hardcoded | Path to WRF geo_em file |
-| `ERA5_FILE_PATTERN` | `era5_wrf_dscale_4km_{date}.nc` | Hardcoded | File pattern for input files |
 | `ERA5_START_YEAR` | `1960` | Hardcoded | Start year for processing |
 | `ERA5_END_YEAR` | `2020` | Hardcoded | End year for processing |
 | `ERA5_DATA_VARS` | `t2_mean,t2_min,t2_max` | Hardcoded | Default variables to process |
 | `ERA5_BATCH_SIZE` | `90` | Hardcoded | Files per batch (range: 2-365) |
-| `ERA5_DASK_CORES` | Auto-detect | Environment | Number of cores for Dask workers |
-| `ERA5_DASK_MEMORY_LIMIT` | `64GB` | Environment | Memory limit for Dask workers |
-| `ERA5_DASK_TASK_TYPE` | `io_bound` | Environment | Task type for Dask optimization |
+| `ERA5_DASK_CORES` | Auto-detect | Code/Auto-detect (via SLURM or `os.cpu_count()`); Env var overrides. | Number of cores for Dask workers |
+| `ERA5_DASK_TASK_TYPE` | `io_bound` | Code (defaults to `io_bound` in `config.py`); Env var overrides. | Task type for Dask optimization |
 
 ## Performance Optimization
 
@@ -202,35 +230,21 @@ The default configuration values have been optimized based on comprehensive perf
 
 - **Batch Size**: 90 files per batch (23% faster than previous 365-file default)
 - **Task Type**: io_bound Dask configuration (15% faster than balanced default)
-- **Memory Limit**: 64GB allocation (17% faster than previous 85GB default)
-
-These optimizations provide approximately **40-45% performance improvement** over previous defaults.
+- **Memory Allocation**: Dask automatically configures its memory. Optimal performance was observed when SLURM jobs were allocated memory such that Dask used approximately 64GB. (e.g. SLURM allocated ~72GB, Dask used ~90% of that).
 
 ### Dask Memory Configuration
 
-The `ERA5_DASK_MEMORY_LIMIT` parameter controls total memory allocation for Dask workers:
+Dask's total memory for its worker pool is configured to use a fixed fraction (**90%**) of the total memory available to the job. The total memory is determined by the SLURM allocation (`#SBATCH --mem`) or an internal 64GB default if not in a SLURM environment.
 
-- **64GB** (default): Optimized allocation based on performance profiling
-- **Performance advantage**: 17% faster than 85GB (157.2s vs 190.3s average)
-- **Resource efficiency**: 21GB less memory per job, enabling higher cluster throughput
-- **Safety margin**: 33% buffer below SLURM allocation (96GB) vs previous 11%
-
-**Memory Performance Results**:
-- 64GB: 157.2s average (fastest, optimal resource usage)
-- 85GB: 190.3s average (+21% slower, over-allocated)
+For example, the `process_era5_variable.sbatch` script now requests 96GB from SLURM. Dask will see this 96GB as the total available memory and allocate its worker pool with 90% of it, which is approximately 86GB. This leaves a robust ~10GB buffer for system overhead. This approach is simpler and more stable than previous configurations.
 
 ### Dask Task Type Configuration
 
-The `ERA5_DASK_TASK_TYPE` parameter controls how Dask optimizes worker allocation:
+The `ERA5_DASK_TASK_TYPE` parameter controls how Dask optimizes the cluster's topology. It only affects the number of workers and the number of threads per worker; it does not change the memory allocation strategy.
 
 - **io_bound** (default): Optimized for I/O operations, more workers with fewer threads per worker
 - **balanced**: Balanced approach for mixed workloads
 - **compute_bound**: Optimized for CPU-intensive tasks, fewer workers with more threads
-
-**Performance Results**:
-- io_bound: 147.2s average (fastest)
-- balanced: 173.9s average (+18% slower)
-- compute_bound: 271.4s average (+84% slower)
 
 ### Batch Size Configuration
 

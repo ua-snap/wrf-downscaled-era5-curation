@@ -48,15 +48,20 @@ class DataLocationConfig:
     """Configuration for all data paths and patterns."""
     input_dir: Path
     output_dir: Path
-    geo_file: Path
-    file_pattern: str
+    file_pattern: str = "era5_wrf_dscale_4km_{date}.nc"
+    geo_file: Path = field(init=False)
 
     # Default Chinook paths - kept as documentation and development defaults
     DEFAULT_PATHS = {
         "input_dir": "/beegfs/CMIP6/wrf_era5/04km",
         "output_dir": "/beegfs/CMIP6/$USER/daily_downscaled_era5_for_rasdaman",
-        "geo_file": "/beegfs/CMIP6/wrf_era5/geo_em.d02.nc"
     }
+
+    def __post_init__(self):
+        """Derive geo_file path after initialization."""
+        # Use object.__setattr__ because the dataclass is frozen
+        object.__setattr__(self, 'geo_file', self.input_dir.parent / 'geo_em.d02.nc')
+
     # why a classmethod?
     # because we want to be able to create an instance of the class without having to pass in all the arguments
     @classmethod
@@ -70,7 +75,6 @@ class DataLocationConfig:
         # Get paths from environment
         input_dir = getenv("ERA5_INPUT_DIR")
         output_dir = getenv("ERA5_OUTPUT_DIR")
-        geo_file = getenv("ERA5_GEO_FILE")
 
         if require_env_vars:
             missing = []
@@ -78,8 +82,6 @@ class DataLocationConfig:
                 missing.append("ERA5_INPUT_DIR")
             if not output_dir:
                 missing.append("ERA5_OUTPUT_DIR")
-            if not geo_file:
-                missing.append("ERA5_GEO_FILE")
             
             if missing:
                 raise ValueError(
@@ -88,27 +90,20 @@ class DataLocationConfig:
                     "These must be set before running the pipeline.\n"
                     f"Default paths on Chinook would be:\n"
                     f"ERA5_INPUT_DIR={cls.DEFAULT_PATHS['input_dir']}\n"
-                    f"ERA5_OUTPUT_DIR={cls.DEFAULT_PATHS['output_dir']}\n"
-                    f"ERA5_GEO_FILE={cls.DEFAULT_PATHS['geo_file']}"
+                    f"ERA5_OUTPUT_DIR={cls.DEFAULT_PATHS['output_dir']}"
                 )
         else:
             logger.warning(
                 "Using default Chinook paths - this is not recommended for production!\n"
-                "Set ERA5_INPUT_DIR, ERA5_OUTPUT_DIR, and ERA5_GEO_FILE environment "
+                "Set ERA5_INPUT_DIR and ERA5_OUTPUT_DIR environment "
                 "variables to override defaults."
             )
             input_dir = input_dir or cls.DEFAULT_PATHS["input_dir"]
             output_dir = output_dir or cls.DEFAULT_PATHS["output_dir"]
-            geo_file = geo_file or cls.DEFAULT_PATHS["geo_file"]
 
         return cls(
             input_dir=Path(input_dir),
             output_dir=Path(output_dir),
-            geo_file=Path(geo_file),
-            file_pattern=getenv(
-                "ERA5_FILE_PATTERN", 
-                "era5_wrf_dscale_4km_{date}.nc"
-            )
         )
 
     def validate(self) -> None:
@@ -116,7 +111,7 @@ class DataLocationConfig:
         if not self.input_dir.exists():
             raise ValueError(f"Input directory does not exist: {self.input_dir}")
         if not self.geo_file.exists():
-            raise ValueError(f"Geo file does not exist: {self.geo_file}")
+            raise ValueError(f"Derived geo file does not exist: {self.geo_file}")
         self.output_dir.mkdir(parents=True, exist_ok=True)
 
     def get_year_dir(self, year: int) -> Path:
