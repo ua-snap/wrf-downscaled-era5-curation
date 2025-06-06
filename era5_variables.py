@@ -9,6 +9,8 @@ from typing import Dict, List, Any, Optional, Set, Tuple
 
 from utils.custom_agg_funcs import calc_circular_mean_wind_dir
 
+from utils.custom_agg_funcs import calc_circular_mean_wind_dir
+
 era5_datavar_lut: Dict[str, Dict[str, Any]] = {
     "t2_mean": {
         "var_id": "T2",
@@ -38,7 +40,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "var_id": "rainnc",
         "short_name": "prnc",
         "standard_name": "precipitation_amount",
-        "units": "mm", # equivalent to, but not the CF standard unit (kg m-2)
+        "units": "mm",  # equivalent to, but not the CF standard unit (kg m-2)
         "agg_func": lambda x: x.sum(dim="Time"),
         "description": "Daily accumulated total grid-scale precipitation",
     },
@@ -66,12 +68,16 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "agg_func": calc_circular_mean_wind_dir,
         "description": "Daily mean 10m wind direction",
     },
-        "rh2_mean": {
+    "rh2_mean": {
         "var_id": "rh2",
         "short_name": "rh2m",
         "standard_name": "relative_humidity",
         "units": "%",
+        "short_name": "rh2m",
+        "standard_name": "relative_humidity",
+        "units": "%",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean 2m relative humidity",
         "description": "Daily mean 2m relative humidity",
     },
     "rh2_min": {
@@ -79,7 +85,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "rh2m",
         "standard_name": "relative_humidity",
         "units": "%",
+        "short_name": "rh2m",
+        "standard_name": "relative_humidity",
+        "units": "%",
         "agg_func": lambda x: x.min(dim="Time"),
+        "description": "Daily minimum 2m relative humidity",
         "description": "Daily minimum 2m relative humidity",
     },
     "rh2_max": {
@@ -143,7 +153,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "q2m",
         "standard_name": "specific_humidity",
         "units": "kg kg-1",
+        "short_name": "q2m",
+        "standard_name": "specific_humidity",
+        "units": "kg kg-1",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean water vapor mixing ratio at 2 meters",
         "description": "Daily mean water vapor mixing ratio at 2 meters",
     },
     "psfc_mean": {
@@ -151,7 +165,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "psfc",
         "standard_name": "surface_air_pressure",
         "units": "Pa",
+        "short_name": "psfc",
+        "standard_name": "surface_air_pressure",
+        "units": "Pa",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean surface pressure",
         "description": "Daily mean surface pressure",
     },
     "rh_mean": {
@@ -159,7 +177,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "rh",
         "standard_name": "relative_humidity",
         "units": "%",
+        "short_name": "rh",
+        "standard_name": "relative_humidity",
+        "units": "%",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean relative humidity",
         "description": "Daily mean relative humidity",
     },
     "rh_min": {
@@ -167,7 +189,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "rh",
         "standard_name": "relative_humidity",
         "units": "%",
+        "short_name": "rh",
+        "standard_name": "relative_humidity",
+        "units": "%",
         "agg_func": lambda x: x.min(dim="Time"),
+        "description": "Daily minimum relative humidity",
         "description": "Daily minimum relative humidity",
     },
     "rh_max": {
@@ -175,7 +201,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "rh",
         "standard_name": "relative_humidity",
         "units": "%",
+        "short_name": "rh",
+        "standard_name": "relative_humidity",
+        "units": "%",
         "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum relative humidity",
         "description": "Daily maximum relative humidity",
     },
     "temp_mean": {
@@ -183,7 +213,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "t",
         "standard_name": "air_temperature",
         "units": "K",
+        "short_name": "t",
+        "standard_name": "air_temperature",
+        "units": "K",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean temperature",
         "description": "Daily mean temperature",
     },
     "temp_min": {
@@ -191,7 +225,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "t",
         "standard_name": "air_temperature",
         "units": "K",
+        "short_name": "t",
+        "standard_name": "air_temperature",
+        "units": "K",
         "agg_func": lambda x: x.min(dim="Time"),
+        "description": "Daily minimum temperature",
         "description": "Daily minimum temperature",
     },
     "temp_max": {
@@ -199,7 +237,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "t",
         "standard_name": "air_temperature",
         "units": "K",
+        "short_name": "t",
+        "standard_name": "air_temperature",
+        "units": "K",
         "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum temperature",
         "description": "Daily maximum temperature",
     },
     "qvapor_mean": {
@@ -207,11 +249,18 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "q",
         "standard_name": "specific_humidity",
         "units": "kg kg-1",
+        "short_name": "q",
+        "standard_name": "specific_humidity",
+        "units": "kg kg-1",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean water vapor mixing ratio",
         "description": "Daily mean water vapor mixing ratio",
     },
     "cldfra_mean": {
         "var_id": "CLDFRA",
+        "short_name": "cldfra",
+        "standard_name": "cloud_area_fraction",
+        "units": "1",
         "short_name": "cldfra",
         "standard_name": "cloud_area_fraction",
         "units": "1",
@@ -223,6 +272,9 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "cldfra",
         "standard_name": "cloud_area_fraction",
         "units": "1",
+        "short_name": "cldfra",
+        "standard_name": "cloud_area_fraction",
+        "units": "1",
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum cloud fraction",
     },
@@ -231,7 +283,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "u10m",
         "standard_name": "eastward_wind",
         "units": "m s-1",
+        "short_name": "u10m",
+        "standard_name": "eastward_wind",
+        "units": "m s-1",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean 10m eastward wind component",
         "description": "Daily mean 10m eastward wind component",
     },
     "u10_max": {
@@ -239,7 +295,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "u10m",
         "standard_name": "eastward_wind",
         "units": "m s-1",
+        "short_name": "u10m",
+        "standard_name": "eastward_wind",
+        "units": "m s-1",
         "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum 10m eastward wind component",
         "description": "Daily maximum 10m eastward wind component",
     },
     "v10_mean": {
@@ -247,7 +307,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "v10m",
         "standard_name": "northward_wind",
         "units": "m s-1",
+        "short_name": "v10m",
+        "standard_name": "northward_wind",
+        "units": "m s-1",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean 10m northward wind component",
         "description": "Daily mean 10m northward wind component",
     },
     "v10_max": {
@@ -255,7 +319,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "v10m",
         "standard_name": "northward_wind",
         "units": "m s-1",
+        "short_name": "v10m",
+        "standard_name": "northward_wind",
+        "units": "m s-1",
         "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum 10m northward wind component",
         "description": "Daily maximum 10m northward wind component",
     },
     "u_mean": {
@@ -263,7 +331,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "u",
         "standard_name": "eastward_wind",
         "units": "m s-1",
+        "short_name": "u",
+        "standard_name": "eastward_wind",
+        "units": "m s-1",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean eastward wind component",
         "description": "Daily mean eastward wind component",
     },
     "u_max": {
@@ -271,7 +343,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "u",
         "standard_name": "eastward_wind",
         "units": "m s-1",
+        "short_name": "u",
+        "standard_name": "eastward_wind",
+        "units": "m s-1",
         "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum eastward wind component",
         "description": "Daily maximum eastward wind component",
     },
     "v_mean": {
@@ -279,7 +355,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "v",
         "standard_name": "northward_wind",
         "units": "m s-1",
+        "short_name": "v",
+        "standard_name": "northward_wind",
+        "units": "m s-1",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean northward wind component",
         "description": "Daily mean northward wind component",
     },
     "v_max": {
@@ -287,7 +367,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "v",
         "standard_name": "northward_wind",
         "units": "m s-1",
+        "short_name": "v",
+        "standard_name": "northward_wind",
+        "units": "m s-1",
         "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum northward wind component",
         "description": "Daily maximum northward wind component",
     },
     "w_mean": {
@@ -295,7 +379,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "w",
         "standard_name": "upward_air_velocity",
         "units": "m s-1",
+        "short_name": "w",
+        "standard_name": "upward_air_velocity",
+        "units": "m s-1",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean vertical wind component",
         "description": "Daily mean vertical wind component",
     },
     "w_max": {
@@ -303,7 +391,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "w",
         "standard_name": "upward_air_velocity",
         "units": "m s-1",
+        "short_name": "w",
+        "standard_name": "upward_air_velocity",
+        "units": "m s-1",
         "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum vertical wind component",
         "description": "Daily maximum vertical wind component",
     },
     "snow_sum": {
@@ -311,7 +403,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "swe",
         "standard_name": "surface_snow_amount",
         "units": "kg m-2",
+        "short_name": "swe",
+        "standard_name": "surface_snow_amount",
+        "units": "kg m-2",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated snow water equivalent",
         "description": "Daily accumulated snow water equivalent",
     },
     "snowh_mean": {
@@ -319,7 +415,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "snowd",
         "standard_name": "surface_snow_thickness",
         "units": "m",
+        "short_name": "snowd",
+        "standard_name": "surface_snow_thickness",
+        "units": "m",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean physical snow depth",
         "description": "Daily mean physical snow depth",
     },
     "snowc_max": {
@@ -327,7 +427,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "snowc",
         "standard_name": "surface_snow_area_fraction",
         "units": "1",
+        "short_name": "snowc",
+        "standard_name": "surface_snow_area_fraction",
+        "units": "1",
         "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum snow cover fraction",
         "description": "Daily maximum snow cover fraction",
     },
     "rainc_sum": {
@@ -335,7 +439,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "prc",
         "standard_name": "convective_rainfall_amount",
         "units": "mm",
+        "short_name": "prc",
+        "standard_name": "convective_rainfall_amount",
+        "units": "mm",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated total cumulus precipitation",
         "description": "Daily accumulated total cumulus precipitation",
     },
     "acsnow_sum": {
@@ -343,7 +451,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "prsn",
         "standard_name": "snowfall_amount",
         "units": "kg m-2",
+        "short_name": "prsn",
+        "standard_name": "snowfall_amount",
+        "units": "kg m-2",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated snow",
         "description": "Daily accumulated snow",
     },
     "hfx_sum": {
@@ -351,7 +463,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "hfss",
         "standard_name": "surface_upward_sensible_heat_flux",
         "units": "W m-2",
+        "short_name": "hfss",
+        "standard_name": "surface_upward_sensible_heat_flux",
+        "units": "W m-2",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated upward sensible heat flux at the surface",
         "description": "Daily accumulated upward sensible heat flux at the surface",
     },
     "lh_sum": {
@@ -359,7 +475,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "hfls",
         "standard_name": "surface_upward_latent_heat_flux",
         "units": "W m-2",
+        "short_name": "hfls",
+        "standard_name": "surface_upward_latent_heat_flux",
+        "units": "W m-2",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated latent heat flux at the surface",
         "description": "Daily accumulated latent heat flux at the surface",
     },
     "swdnb_sum": {
@@ -367,7 +487,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "rsds",
         "standard_name": "surface_downwelling_shortwave_flux",
         "units": "W m-2",
+        "short_name": "rsds",
+        "standard_name": "surface_downwelling_shortwave_flux",
+        "units": "W m-2",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated downwelling shortwave flux at surface",
         "description": "Daily accumulated downwelling shortwave flux at surface",
     },
     "swdnbc_sum": {
@@ -375,7 +499,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "rsdscs",
         "standard_name": "surface_downwelling_clear_sky_shortwave_flux",
         "units": "W m-2",
+        "short_name": "rsdscs",
+        "standard_name": "surface_downwelling_clear_sky_shortwave_flux",
+        "units": "W m-2",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated downwelling clear sky shortwave flux at surface",
         "description": "Daily accumulated downwelling clear sky shortwave flux at surface",
     },
     "swupb_sum": {
@@ -383,7 +511,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "rsus",
         "standard_name": "surface_upwelling_shortwave_flux",
         "units": "W m-2",
+        "short_name": "rsus",
+        "standard_name": "surface_upwelling_shortwave_flux",
+        "units": "W m-2",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated upwelling shortwave flux at surface",
         "description": "Daily accumulated upwelling shortwave flux at surface",
     },
     "swupbc_sum": {
@@ -391,7 +523,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "rsuscs",
         "standard_name": "surface_upwelling_clear_sky_shortwave_flux",
         "units": "W m-2",
+        "short_name": "rsuscs",
+        "standard_name": "surface_upwelling_clear_sky_shortwave_flux",
+        "units": "W m-2",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated upwelling clear sky shortwave flux at surface",
         "description": "Daily accumulated upwelling clear sky shortwave flux at surface",
     },
     "lwdnb_sum": {
@@ -399,7 +535,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "rlds",
         "standard_name": "surface_downwelling_longwave_flux",
         "units": "W m-2",
+        "short_name": "rlds",
+        "standard_name": "surface_downwelling_longwave_flux",
+        "units": "W m-2",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated downwelling longwave flux at surface",
         "description": "Daily accumulated downwelling longwave flux at surface",
     },
     "lwdnbc_sum": {
@@ -407,7 +547,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "rldscs",
         "standard_name": "surface_downwelling_clear_sky_longwave_flux",
         "units": "W m-2",
+        "short_name": "rldscs",
+        "standard_name": "surface_downwelling_clear_sky_longwave_flux",
+        "units": "W m-2",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated downwelling clear sky longwave flux at surface",
         "description": "Daily accumulated downwelling clear sky longwave flux at surface",
     },
     "lwupb_sum": {
@@ -415,7 +559,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "rlus",
         "standard_name": "surface_upwelling_longwave_flux",
         "units": "W m-2",
+        "short_name": "rlus",
+        "standard_name": "surface_upwelling_longwave_flux",
+        "units": "W m-2",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated upwelling longwave flux at surface",
         "description": "Daily accumulated upwelling longwave flux at surface",
     },
     "lwupbc_sum": {
@@ -423,7 +571,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "rluscs",
         "standard_name": "surface_upwelling_clear_sky_longwave_flux",
         "units": "W m-2",
+        "short_name": "rluscs",
+        "standard_name": "surface_upwelling_clear_sky_longwave_flux",
+        "units": "W m-2",
         "agg_func": lambda x: x.sum(dim="Time"),
+        "description": "Daily accumulated upwelling clear sky longwave flux at surface",
         "description": "Daily accumulated upwelling clear sky longwave flux at surface",
     },
     "twb_mean": {
@@ -431,7 +583,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "twb",
         "standard_name": "wet_bulb_temperature",
         "units": "K",
+        "short_name": "twb",
+        "standard_name": "wet_bulb_temperature",
+        "units": "K",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean wet bulb temperature",
         "description": "Daily mean wet bulb temperature",
     },
     "twb_min": {
@@ -439,7 +595,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "twb",
         "standard_name": "wet_bulb_temperature",
         "units": "K",
+        "short_name": "twb",
+        "standard_name": "wet_bulb_temperature",
+        "units": "K",
         "agg_func": lambda x: x.min(dim="Time"),
+        "description": "Daily minimum wet bulb temperature",
         "description": "Daily minimum wet bulb temperature",
     },
     "twb_max": {
@@ -447,7 +607,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "twb",
         "standard_name": "wet_bulb_temperature",
         "units": "K",
+        "short_name": "twb",
+        "standard_name": "wet_bulb_temperature",
+        "units": "K",
         "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum wet bulb temperature",
         "description": "Daily maximum wet bulb temperature",
     },
     "albedo_mean": {
@@ -455,7 +619,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "al",
         "standard_name": "surface_albedo",
         "units": "1",
+        "short_name": "al",
+        "standard_name": "surface_albedo",
+        "units": "1",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean albedo",
         "description": "Daily mean albedo",
     },
     "smois_mean": {
@@ -463,7 +631,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "mrsos",
         "standard_name": "volume_fraction_of_water_in_soil_layer",
         "units": "m3 m-3",
+        "short_name": "mrsos",
+        "standard_name": "volume_fraction_of_water_in_soil_layer",
+        "units": "m3 m-3",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean soil moisture",
         "description": "Daily mean soil moisture",
     },
     "sh2o_mean": {
@@ -471,7 +643,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "mrso",
         "standard_name": "volume_fraction_of_liquid_water_in_soil_layer",
         "units": "m3 m-3",
+        "short_name": "mrso",
+        "standard_name": "volume_fraction_of_liquid_water_in_soil_layer",
+        "units": "m3 m-3",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean soil liquid water content",
         "description": "Daily mean soil liquid water content",
     },
     "tsk_mean": {
@@ -479,7 +655,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "ts",
         "standard_name": "surface_temperature",
         "units": "K",
+        "short_name": "ts",
+        "standard_name": "surface_temperature",
+        "units": "K",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean surface skin temperature",
         "description": "Daily mean surface skin temperature",
     },
     "tsk_min": {
@@ -487,7 +667,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "ts",
         "standard_name": "surface_temperature",
         "units": "K",
+        "short_name": "ts",
+        "standard_name": "surface_temperature",
+        "units": "K",
         "agg_func": lambda x: x.min(dim="Time"),
+        "description": "Daily minimum surface skin temperature",
         "description": "Daily minimum surface skin temperature",
     },
     "tsk_max": {
@@ -495,7 +679,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "ts",
         "standard_name": "surface_temperature",
         "units": "K",
+        "short_name": "ts",
+        "standard_name": "surface_temperature",
+        "units": "K",
         "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum surface skin temperature",
         "description": "Daily maximum surface skin temperature",
     },
     "tslb_mean": {
@@ -503,7 +691,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "tsl",
         "standard_name": "soil_temperature",
         "units": "K",
+        "short_name": "tsl",
+        "standard_name": "soil_temperature",
+        "units": "K",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean soil temperature",
         "description": "Daily mean soil temperature",
     },
     "tslb_min": {
@@ -511,11 +703,18 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "tsl",
         "standard_name": "soil_temperature",
         "units": "K",
+        "short_name": "tsl",
+        "standard_name": "soil_temperature",
+        "units": "K",
         "agg_func": lambda x: x.min(dim="Time"),
+        "description": "Daily minimum soil temperature",
         "description": "Daily minimum soil temperature",
     },
     "tslb_max": {
         "var_id": "TSLB",
+        "short_name": "tsl",
+        "standard_name": "soil_temperature",
+        "units": "K",
         "short_name": "tsl",
         "standard_name": "soil_temperature",
         "units": "K",
@@ -527,7 +726,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "tos",
         "standard_name": "sea_surface_temperature",
         "units": "K",
+        "short_name": "tos",
+        "standard_name": "sea_surface_temperature",
+        "units": "K",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean sea surface temperature",
         "description": "Daily mean sea surface temperature",
     },
     "sst_min": {
@@ -535,7 +738,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "tos",
         "standard_name": "sea_surface_temperature",
         "units": "K",
+        "short_name": "tos",
+        "standard_name": "sea_surface_temperature",
+        "units": "K",
         "agg_func": lambda x: x.min(dim="Time"),
+        "description": "Daily minimum sea surface temperature",
         "description": "Daily minimum sea surface temperature",
     },
     "sst_max": {
@@ -543,7 +750,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "tos",
         "standard_name": "sea_surface_temperature",
         "units": "K",
+        "short_name": "tos",
+        "standard_name": "sea_surface_temperature",
+        "units": "K",
         "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum sea surface temperature",
         "description": "Daily maximum sea surface temperature",
     },
     "height_mean": {
@@ -551,7 +762,11 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "zg",
         "standard_name": "geopotential_height",
         "units": "m",
+        "short_name": "zg",
+        "standard_name": "geopotential_height",
+        "units": "m",
         "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean geopotential height",
         "description": "Daily mean geopotential height",
     },
 }
@@ -559,10 +774,10 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
 
 def get_variable_info(variable_name: str) -> Optional[Dict[str, Any]]:
     """Get information about a variable.
-    
+
     Args:
         variable_name: The name of the variable to find
-        
+
     Returns:
         Variable information dict or None if not found
     """
@@ -571,7 +786,7 @@ def get_variable_info(variable_name: str) -> Optional[Dict[str, Any]]:
 
 def list_all_variables() -> List[str]:
     """List all available variables.
-    
+
     Returns:
         List of all variable names
     """
@@ -580,36 +795,43 @@ def list_all_variables() -> List[str]:
 
 def validate_variable_request(variable_name: str) -> Tuple[bool, str]:
     """Validate a variable request, suggesting alternatives if not found.
-    
+
     Args:
         variable_name: The name of the variable to validate
-        
+
     Returns:
         Tuple of (is_valid, message)
     """
     if not variable_name:
         return False, "No variable name provided"
-        
+
     if variable_name in era5_datavar_lut:
         return True, f"Variable '{variable_name}' found"
-    
+
     # If not found, suggest alternatives
     all_vars = list_all_variables()
     # Find similar variable names
-    similar = [v for v in all_vars if variable_name.lower() in v.lower() or v.lower() in variable_name.lower()]
-    
+    similar = [
+        v
+        for v in all_vars
+        if variable_name.lower() in v.lower() or v.lower() in variable_name.lower()
+    ]
+
     if similar:
-        return False, f"Variable '{variable_name}' not found. Did you mean one of: {', '.join(similar)}?"
+        return (
+            False,
+            f"Variable '{variable_name}' not found. Did you mean one of: {', '.join(similar)}?",
+        )
     else:
         return False, f"Variable '{variable_name}' not found in available variables."
 
 
 def get_source_variables(variable_names: List[str]) -> Set[str]:
     """Get the set of unique source variables needed for the requested variables.
-    
+
     Args:
         variable_names: List of variable names to process
-        
+
     Returns:
         Set of source variable IDs
     """

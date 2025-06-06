@@ -1,6 +1,7 @@
 # ERA5 Processing Pipeline
 
 This pipeline is for processing ERA5 4 km WRF-downscaled data. The pipeline is intended to resample the input data source from hourly to daily resolution, and put it on the EPSG:3338 grid. This approach uses Dask for parallel processing within individual compute nodes, but processes one variable and one year at a time using SLURM for job management.
+This pipeline is for processing ERA5 4 km WRF-downscaled data. The pipeline is intended to resample the input data source from hourly to daily resolution, and put it on the EPSG:3338 grid. This approach uses Dask for parallel processing within individual compute nodes, but processes one variable and one year at a time using SLURM for job management.
 
 ## Project Structure
 
@@ -110,6 +111,7 @@ sbatch process_era5_variable.sbatch 1980 t2_mean overwrite
 The SLURM script accepts up to three parameters:
 1. `year`: Year to process (required)
 2. `variable`: Variable to process (required)
+3. `overwrite`: Force reprocessing of existing files (optional)
 3. `overwrite`: Force reprocessing of existing files (optional)
 
 The SLURM script will pass those parameters to the worker script.

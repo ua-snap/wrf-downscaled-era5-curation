@@ -308,6 +308,16 @@ def process_variable(ds: xr.Dataset, variable: str) -> xr.Dataset:
     
     # Re-assign the modified DataArray back to the dataset
     result_ds[variable] = resampled
+    # Assign CF standard attributes using info from the lookup table
+    resampled.attrs["long_name"] = var_info.get("description", f"Daily {variable}") 
+    resampled.attrs["units"] = var_info.get("units", "unknown")
+    resampled.attrs["standard_name"] = var_info.get("standard_name", "unknown")
+    # Remove the old description and projection if they exist in the original data
+    resampled.attrs.pop("description", None)
+    resampled.attrs.pop("projection", None)
+    
+    # Re-assign the modified DataArray back to the dataset
+    result_ds[variable] = resampled
     
     return result_ds
 
@@ -387,9 +397,11 @@ def process_files_in_batches(
 
 def write_output(ds: xr.Dataset, variable: str, output_file: Path) -> None:
     """Write output to NetCDF file following CF conventions.
+    """Write output to NetCDF file following CF conventions.
     
     Args:
         ds: xarray Dataset to write
+        variable: The primary variable name in the dataset
         variable: The primary variable name in the dataset
         output_file: Output file path
     """
@@ -424,6 +436,7 @@ def write_output(ds: xr.Dataset, variable: str, output_file: Path) -> None:
     ds.to_netcdf(
         output_file,
         engine="h5netcdf",
+        encoding=encoding
         encoding=encoding
     )
     logger.info(f"Successfully wrote output to {output_file}")
