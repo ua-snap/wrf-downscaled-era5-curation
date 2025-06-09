@@ -8,7 +8,6 @@ the number of concurrent jobs and includes automatic retry functionality for job
 Configuration is handled through environment variables:
     ERA5_INPUT_DIR: Input directory containing ERA5 data
     ERA5_OUTPUT_DIR: Output directory for processed files
-    ERA5_GEO_FILE: Path to WRF geo_em file for projection information
     ERA5_START_YEAR: Start year for processing
     ERA5_END_YEAR: End year for processing
 
@@ -181,7 +180,6 @@ def submit_individual_jobs(
         # Create log directory for this variable if needed
         log_dir = create_job_log_directory(variable)
         
-        # Wait for available slots
         wait_for_available_slots()
         
         # Submit the job with specified time limit
@@ -271,12 +269,12 @@ def wait_for_jobs_completion() -> None:
             
             # Log progress every 5 minutes
             current_time = time.time()
-            if current_time - last_log_time >= 300:  # 5 minutes
+            if current_time - last_log_time >= 300:
                 elapsed_minutes = (current_time - start_time) / 60
                 logger.info(f"Still waiting for {current_jobs} jobs to complete (elapsed: {elapsed_minutes:.1f} minutes)")
                 last_log_time = current_time
             
-            time.sleep(10)  # Check every 10 seconds
+            time.sleep(10)  # Check every N seconds
             
         except subprocess.CalledProcessError as e:
             logger.warning(f"Error checking job status: {e}")
@@ -445,7 +443,6 @@ def main() -> None:
     args = parse_args()
     
     try:
-        # Wipe existing SLURM output logs for a fresh run
         wipe_slurm_output_logs()
 
         variables = get_variables_to_process(args)
@@ -459,7 +456,6 @@ def main() -> None:
             overwrite=args.overwrite
         )
         
-        # Wait for all jobs to complete
         wait_for_jobs_completion()
         
         # Handle retries for timed-out jobs if enabled
