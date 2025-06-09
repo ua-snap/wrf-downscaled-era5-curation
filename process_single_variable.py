@@ -131,6 +131,10 @@ def is_3d_variable(variable: str) -> bool:
 
     Returns:
         True if the variable is 3D, False otherwise
+    Notes:
+        CP: NOT USED YET - but placeholder because I expect multi-level vars will need to be
+        distinguished and handled a little differently. There will be a "pressure level" axis,
+        most likely.
     """
     # Get source variable ID
     if variable not in era5_datavar_lut:
@@ -158,11 +162,13 @@ def is_3d_variable(variable: str) -> bool:
 
 
 def get_variable_chunks(variable: str) -> Dict[str, Union[str, int]]:
-    """Get optimal chunk sizes for a variable.
+    """Get chunk sizes for a variable.
 
-    Configures chunking with no time chunking (-1 for Time dimension) to optimize
-    performance, since memory usage is typically low. Spatial dimensions are kept
-    as full chunks to avoid splitting.
+    Configures chunking, although no (-1 for all dimensions) chunking
+    performs well as memory usage is typically low.
+
+    Chunking is naive (i.e. -1) here, really - but it does seem to help with the dask
+    book-keeping.
 
     Args:
         variable: Variable name
@@ -170,20 +176,21 @@ def get_variable_chunks(variable: str) -> Dict[str, Union[str, int]]:
     Returns:
         Dictionary of chunk sizes
     """
-    # For 3D variables, use smaller chunks in time and level dimensions
+    # For 3D variables, may need to edit later into smaller chunks
+    # probably in the time and level dimensions
     if is_3d_variable(variable):
         return {
-            "Time": -1,  # Use entire time dimension (no chunking)
-            "interp_level": -1,  # Include all levels in each chunk
-            "south_north": -1,  # Use full chunks for south_north to avoid splitting
-            "west_east": -1,  # Use full chunks for west_east to avoid splitting
+            "Time": -1,
+            "interp_level": -1,
+            "south_north": -1,
+            "west_east": -1,
         }
     else:
-        # For 2D variables, we can use larger chunks in time
+        # For 2D variables, naive chunks until we can't
         return {
-            "Time": -1,  # Use entire time dimension (no chunking)
-            "south_north": -1,  # Use full chunks for south_north to avoid splitting
-            "west_east": -1,  # Use full chunks for west_east to avoid splitting
+            "Time": -1,
+            "south_north": -1,
+            "west_east": -1,
         }
 
 
@@ -257,7 +264,7 @@ def read_data(
             if dim in ["south_north", "west_east"]
         }
 
-        # Determine optimal chunks based on original file structure
+        # Determine chunks
         if chunks.get("south_north") == -1 and "south_north" in original_chunks:
             chunks["south_north"] = original_chunks["south_north"]
         if chunks.get("west_east") == -1 and "west_east" in original_chunks:
@@ -267,7 +274,7 @@ def read_data(
 
     logger.info(f"Opening files with chunks: {chunks}")
 
-    # Open the dataset with Dask
+    
     ds = xr.open_mfdataset(
         filepaths,
         drop_variables=drop_vars,
@@ -358,7 +365,7 @@ def regrid_to_3338(ds: xr.Dataset, grid_info: Dict[str, Any]) -> xr.Dataset:
 def process_files_in_batches(
     filepaths: List[Path], variable: str, chunks: Dict[str, Union[str, int]]
 ) -> xr.Dataset:
-    """Process files in smaller batches to reduce metadata contention.
+    """Process files in smaller batches to reduce I/O contention.
 
     Args:
         filepaths: List of input file paths
@@ -442,7 +449,6 @@ def write_output(ds: xr.Dataset, variable: str, output_file: Path) -> None:
 
     encoding = {var: {"zlib": True, "complevel": 5} for var in ds.data_vars}
 
-    # Write to NetCDF file
     logger.info(f"Writing output to {output_file}")
     ds.to_netcdf(output_file, engine="h5netcdf", encoding=encoding)
     logger.info(f"Successfully wrote output to {output_file}")
@@ -498,18 +504,16 @@ def process_variable_for_year(
         logger.info(f"Creating Dask client with {config.dask.task_type} configuration")
         client, cluster = get_dask_client(config.dask.cores, config.dask.task_type)
 
-        # Get grid information
         logger.info(f"Retrieving grid information from {data_config.geo_file}")
         grid_info = get_grid_info(get_year_filepaths(year)[0], data_config.geo_file)
 
-        # Read input data in batches to reduce metadata contention
+        # Read input data in batches
         filepaths = get_year_filepaths(year)
         logger.info(
             f"Reading data for {variable} from {len(filepaths)} files in batches of {config.BATCH_SIZE}"
         )
         ds = process_files_in_batches(filepaths, variable, chunks)
 
-        # Process the variable - this is mostly I/O and simple aggregation
         logger.info(f"Processing variable {variable}")
         processed_ds = process_variable(ds, variable)
 
@@ -517,19 +521,16 @@ def process_variable_for_year(
         del ds
         client.run(lambda: gc.collect())  # Trigger garbage collection on workers
 
-        # Regrid to EPSG:3338 - computation intensive
         logger.info(f"Reprojecting data to EPSG:3338")
         reprojected_ds = regrid_to_3338(processed_ds, grid_info)
 
-        # Clean up intermediate data to free memory
         del processed_ds
-        client.run(lambda: gc.collect())  # Trigger garbage collection on workers
+        client.run(lambda: gc.collect())
 
         write_output(reprojected_ds, variable, output_file)
 
-        # Clean up final data
         del reprojected_ds
-        client.run(lambda: gc.collect())  # Trigger garbage collection on workers
+        client.run(lambda: gc.collect())
 
         return output_file
 
