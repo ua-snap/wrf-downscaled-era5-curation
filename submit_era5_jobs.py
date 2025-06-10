@@ -247,18 +247,28 @@ def wipe_slurm_output_logs(base_log_dir: Path = Path.cwd() / "logs" / "era5_proc
     logger.info(f"Wiped {count} SLURM .out log files.")
 
 
-def wipe_application_logs(base_log_dir: Path = Path.cwd() / "logs") -> None:
+def wipe_application_logs(base_log_dir: Path = Path.cwd() / "logs", logger=None) -> None:
     """Wipe all .log files from subdirectories of base_log_dir."""
-    logger.info(f"Wiping existing application .log files from {base_log_dir}...")
+    if logger:
+        logger.info(f"Wiping existing application .log files from {base_log_dir}...")
+    else:
+        print(f"Wiping existing application .log files from {base_log_dir}...")
     count = 0
     for log_file in base_log_dir.rglob("*.log"):
         try:
             log_file.unlink()
-            logger.debug(f"Deleted {log_file}")
+            if logger:
+                logger.debug(f"Deleted {log_file}")
             count += 1
         except OSError as e:
-            logger.warning(f"Error deleting {log_file}: {e}")
-    logger.info(f"Wiped {count} application .log files.")
+            if logger:
+                logger.warning(f"Error deleting {log_file}: {e}")
+            else:
+                print(f"Warning: Error deleting {log_file}: {e}")
+    if logger:
+        logger.info(f"Wiped {count} application .log files.")
+    else:
+        print(f"Wiped {count} application .log files.")
 
 
 def wait_for_jobs_completion() -> None:
@@ -447,6 +457,9 @@ def validate_job_completion(variables: List[str], start_year: int, end_year: int
 
 def main() -> None:
     """Main function for job submission."""
+    # Wipe old application log files before setting up new logging
+    wipe_application_logs()
+    
     # Configure logging for the job submission process
     setup_variable_logging(
         variable="submit_era5_jobs",
@@ -458,7 +471,6 @@ def main() -> None:
     
     try:
         wipe_slurm_output_logs()
-        wipe_application_logs()
 
         variables = get_variables_to_process(args)
         
