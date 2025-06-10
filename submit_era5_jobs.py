@@ -247,6 +247,20 @@ def wipe_slurm_output_logs(base_log_dir: Path = Path.cwd() / "logs" / "era5_proc
     logger.info(f"Wiped {count} SLURM .out log files.")
 
 
+def wipe_application_logs(base_log_dir: Path = Path.cwd() / "logs") -> None:
+    """Wipe all .log files from subdirectories of base_log_dir."""
+    logger.info(f"Wiping existing application .log files from {base_log_dir}...")
+    count = 0
+    for log_file in base_log_dir.rglob("*.log"):
+        try:
+            log_file.unlink()
+            logger.debug(f"Deleted {log_file}")
+            count += 1
+        except OSError as e:
+            logger.warning(f"Error deleting {log_file}: {e}")
+    logger.info(f"Wiped {count} application .log files.")
+
+
 def wait_for_jobs_completion() -> None:
     """Wait for all submitted jobs to complete."""
     logger.info("Waiting for all submitted jobs to complete...")
@@ -444,6 +458,7 @@ def main() -> None:
     
     try:
         wipe_slurm_output_logs()
+        wipe_application_logs()
 
         variables = get_variables_to_process(args)
         
