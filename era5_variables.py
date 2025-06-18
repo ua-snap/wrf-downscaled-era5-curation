@@ -17,6 +17,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "degree_C",
         "agg_func": lambda x: x.mean(dim="Time") - 273.15,
         "description": "Daily mean temperature at 2 meters",
+        "cell_methods": "time: mean",
     },
     "t2_min": {
         "var_id": "T2",
@@ -25,6 +26,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "degree_C",
         "agg_func": lambda x: x.min(dim="Time") - 273.15,
         "description": "Daily minimum temperature at 2 meters",
+        "cell_methods": "time: minimum",
     },
     "t2_max": {
         "var_id": "T2",
@@ -33,6 +35,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "degree_C",
         "agg_func": lambda x: x.max(dim="Time") - 273.15,
         "description": "Daily maximum temperature at 2 meters",
+        "cell_methods": "time: maximum",
     },
     "rainnc_sum": {
         "var_id": "rainnc",
@@ -41,6 +44,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "mm",  # equivalent to, but not the CF standard unit (kg m-2)
         "agg_func": lambda x: x.sum(dim="Time"),
         "description": "Daily accumulated total grid-scale precipitation",
+        "cell_methods": "time: sum",
     },
     "wspd10_mean": {
         "var_id": "wspd10",
@@ -49,6 +53,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "m s-1",
         "agg_func": lambda x: x.mean(dim="Time"),
         "description": "Daily mean 10m wind speed",
+        "cell_methods": "time: mean",
     },
     "wspd10_max": {
         "var_id": "wspd10",
@@ -57,6 +62,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "m s-1",
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum 10m wind speed",
+        "cell_methods": "time: maximum",
     },
     "wdir10_mean": {
         "var_id": "wdir10",
@@ -65,6 +71,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "degree",
         "agg_func": calc_circular_mean_wind_dir,
         "description": "Daily mean 10m wind direction",
+        "cell_methods": "time: mean",
     },
     "rh2_mean": {
         "var_id": "rh2",
@@ -73,6 +80,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "%",
         "agg_func": lambda x: x.mean(dim="Time"),
         "description": "Daily mean 2m relative humidity",
+        "cell_methods": "time: mean",
     },
     "rh2_min": {
         "var_id": "rh2",
@@ -81,6 +89,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "%",
         "agg_func": lambda x: x.min(dim="Time"),
         "description": "Daily minimum 2m relative humidity",
+        "cell_methods": "time: minimum",
     },
     "rh2_max": {
         "var_id": "rh2",
@@ -89,6 +98,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "%",
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum 2m relative humidity",
+        "cell_methods": "time: maximum",
     },
     "seaice_max": {
         "var_id": "SEAICE",
@@ -97,6 +107,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "1", # CF standard unit for fractional area, but "1" as a unit is sorta confusing
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum sea ice area fraction",
+        "cell_methods": "time: maximum",
     },
     "slp_mean": {
         "var_id": "slp",
