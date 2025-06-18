@@ -328,6 +328,7 @@ def process_variable(ds: xr.Dataset, variable: str) -> xr.Dataset:
     resampled.attrs["long_name"] = var_info.get("description", f"Daily {variable}")
     resampled.attrs["units"] = var_info.get("units", "unknown")
     resampled.attrs["standard_name"] = var_info.get("standard_name", "unknown")
+    resampled.attrs["cell_methods"] = var_info.get("cell_methods", "unknown")
     # Remove the old description and projection if they exist in the original data
     resampled.attrs.pop("description", None)
     resampled.attrs.pop("projection", None)
