@@ -485,7 +485,6 @@ def process_variable_for_year(
     # Check if output already exists
     exists, output_file = check_output_exists(variable, year)
     if exists and not overwrite:
-        logger.info(f"Output file exists, skipping (overwrite=False)")
         raise RuntimeError(
             f"Output file {output_file} already exists and overwrite=False"
         )
