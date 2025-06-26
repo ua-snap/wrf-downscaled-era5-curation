@@ -215,7 +215,7 @@ def get_grid_info(tmp_file, geo_file):
 
     # this is where we plug in the center longitude of the domain to get the center x, y in projected space
     e, n = wgs_to_wrf_transformer.transform(
-        geo_ds.attrs["CEN_LON"], geo_ds.attrs["TRUELAT1"]
+        geo_ds.attrs["CEN_LON"], geo_ds.attrs["CEN_LAT"]
     )
     # now compute the rest of the grid based on x/y dimension lengths and grid spacing
     dx = dy = 4000
