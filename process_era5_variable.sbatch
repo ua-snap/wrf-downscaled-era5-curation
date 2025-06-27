@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=96G
-#SBATCH --time=00:05:00
+#SBATCH --time=00:07:00
 #SBATCH --partition=t2small
 #SBATCH --output=logs/era5_process/%x_%j.out
 
