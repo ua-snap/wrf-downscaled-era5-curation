@@ -10,18 +10,83 @@ This pipeline is for processing ERA5 4 km WRF-downscaled data. The pipeline is i
 - `process_era5_variable.sbatch`: SLURM job template for individual processing jobs
 - `submit_era5_jobs.py`: Script for submitting multiple jobs
 - `era5_variables.py`: Variable definitions and metadata, aggregation functions
-- `config.py`: Configuration settings
+- `config.py`: Configuration settings and environment variable handling
 
 ### Utilities
 
 There are several modules in the `utils` directory:
 - **dask_utils.py**: Manages Dask client configuration and distributed computing setup
-- **memory.py**: Tracks memory usage during processing
 - **logging.py**: Provides standardized logging configuration
+- **custom_agg_funcs.py**: Bespoke functions for aggregating data where a simple lambda is awkward.
+
+### Quality Control
+
+The `qc` directory: quality control plotting functions and notebooks.
+
+## Configuration
+
+The pipeline uses environment variables for configuration, with sensible defaults for the Chinook environment. You can set these variables to override the defaults:
+
+### Required Environment Variables
+- `ERA5_INPUT_DIR`: Input directory containing ERA5 data (default: "/beegfs/CMIP6/wrf_era5/04km")
+- `ERA5_OUTPUT_DIR`: Output directory for processed files (default: "/beegfs/CMIP6/cparr4/daily_downscaled_era5_for_rasdaman")
+
+**WRF `geo_em` File Path**
+The path to the WRF projection file (`geo_em.d02.nc`) is automatically derived from the `ERA5_INPUT_DIR` path. The **assumption:** is that the `geo_em.d02.nc` file is located exactly one directory level above the `ERA5_INPUT_DIR`. For example, if `ERA5_INPUT_DIR` is set to `/beegfs/CMIP6/wrf_era5/04km`, the pipeline will automatically look for the geo file at `/beegfs/CMIP6/wrf_era5/geo_em.d02.nc`. The processing will fail if this file is not found at the derived location.
+
+**Input File Naming Convention**
+The pattern for input data files is assumed to be `era5_wrf_dscale_4km_{date}.nc`, where `{date}` is the date string (e.g., `1980-01-01`).
+
+### Optional Environment Variables
+- `ERA5_START_YEAR`: Start year for processing (default: 1960)
+- `ERA5_END_YEAR`: End year for processing (default: 2020)
+- `ERA5_DATA_VARS`: Comma-separated list of variables to process (default: t2_mean,t2_min,t2_max)
+- `ERA5_BATCH_SIZE`: Number of files to process per batch (default: 90, range: 2-365)
+- `ERA5_DASK_CORES`: Number of cores Dask should use. If set, this overrides auto-detection. Auto-detection prioritizes `SLURM_CPUS_PER_TASK` if in a SLURM environment, otherwise `os.cpu_count()`.
+- `ERA5_DASK_TASK_TYPE`: Task type for Dask worker optimization (default: `io_bound`, set in `config.py`). Can be set to `io_bound`, `compute_bound`, or `balanced`. This environment variable overrides the default.
+
+### Dask Configuration Details
+
+**Cores:**
+The number of cores Dask utilizes is determined in the following order of precedence:
+1.  The `ERA5_DASK_CORES` environment variable, if set.
+2.  The `SLURM_CPUS_PER_TASK` environment variable, if the job is running within a SLURM environment.
+3.  The total number of CPU cores available on the node, as reported by `os.cpu_count()`.
+
+**Memory:**
+The total memory available to the Dask `LocalCluster` is determined in two steps:
+1.  **Total Available Memory**: The pipeline first determines the total memory available to the job. This is either the full amount allocated by SLURM (via the `SLURM_MEM_PER_NODE` environment variable) or a fallback of "64GB" if running outside a SLURM environment.
+2.  **Dask Worker Pool Allocation**: The Dask worker pool is **always** configured to use **90%** of this total available memory. The remaining 10% is reserved as a safety buffer for the operating system and other overhead.
+
+This 90% fraction is a fixed heuristic and does not change based on the `task_type`. It is **critical** to ensure that the memory requested from SLURM (via `#SBATCH --mem`) is sufficient. For a robust setup, it is recommended to request at least 96GB.
+
+The `ERA5_DASK_TASK_TYPE` (defaulting to `io_bound`) influences how Dask allocates workers and threads based on the available cores, but it does not affect memory allocation.
 
 ## Execution
 
-### Processing a Single Variable for a Single Year
+The pipeline should be executed on Chinook, and can be launched from a "login" or "debug" node.
+
+### `submit_era5_jobs.py`: Processing Multiple Variables and Years
+
+The job submission script is the recommended method of executing this pipeline. For example:
+
+```bash
+# Process multiple variables for a range of years
+python submit_era5_jobs.py --variables t2_mean,t2_min,t2_max --start_year 1990 --end_year 2000
+```
+
+#### Job Submission Options
+
+The job submission script provides several options:
+
+- `--variables`: Comma-separated list of variables to process (required)
+- `--start_year`: Start year for processing (default from ERA5_START_YEAR)
+- `--end_year`: End year for processing (default from ERA5_END_YEAR)
+- `--max_concurrent`: Maximum number of concurrent jobs (default: 30)
+- `--overwrite`: Force reprocessing of existing files (default: False)
+- `--no_retry`: Disable automatic retry of timed-out jobs (default: False)
+
+### `process_era5_variable.sbatch`: Processing a Single Variable for a Single Year
 
 This is **not** the recommended entry point for the pipeline, but it is useful for rapid testing and for isolating the sbatch template and worker script from the job submission script. To manually process a single variable for a single year:
 
@@ -29,10 +94,7 @@ This is **not** the recommended entry point for the pipeline, but it is useful f
 # Basic usage
 sbatch process_era5_variable.sbatch <year> <variable>
 
-# Example
-sbatch process_era5_variable.sbatch 1980 t2_mean
-
-# Force overwrite of existing files, handy for testing
+# Force overwrite of existing files
 sbatch process_era5_variable.sbatch 1980 t2_mean overwrite
 ```
 
@@ -41,68 +103,30 @@ The SLURM script accepts up to three parameters:
 2. `variable`: Variable to process (required)
 3. `overwrite`: Force reprocessing of existing files (optional)
 
-### Processing Multiple Variables and Years
+The SLURM script will pass those parameters to the worker script.
 
-Using the `submit_era5_jobs.py` is the recommended method of executing this pipeline for multiple variables and years:
+### `process_single_variable.py`: The Worker Script
 
-```bash
-# Process a single variable for a range of years
-python submit_era5_jobs.py --variable t2_mean --start_year 1980 --end_year 1985
+This is **not** the recommended entry point to this pipeline. However, directly executing the script is useful for testing and isolating the core logic from any and all SLURM orchestration. The worker script has options for fine-tuning the data processing:
 
-# Process multiple variables for a range of years
-python submit_era5_jobs.py --variables t2_mean,t2_min,t2_max,rh2_mean --start_year 1990 --end_year 2000
-
-# NOT WORKING YET Process all variables for a single year
-python submit_era5_jobs.py --all_variables --start_year 2000 --end_year 2000
-```
-
-#### More Job Submission Options
-
-The job submission script provides several additional options:
-
-- `--max_concurrent`: Maximum number of concurrent jobs (default: 20). Nothing wrong with going 30+ here, depending on how greedy you want to be in terms of grabbing `t2small` nodes.
-- `--output_dir`: Output directory (default from config). You can set this with an environment variable as well. We may deprecate in this future such that the output directory may only be set by providing the environment variable to simply the configuration pathways.
-- `--overwrite`: Boolean flag to overwrite existing output files (default: False)
-
-#### More Worker Script Options
-
-The `process_single_variable.py` worker script has some additional options for fine-tuning the data processing:
-
-- `--input_dir`: Directory containing ERA5 data (default from config)
-- `--output_dir`: Directory for output files (default from config)
-- `--geo_file`: Path to WRF geo_em file for projection information (default from config)
-- `--fn_str`: File pattern for input files (default from config)
+- `--year`: Year to process (required)
+- `--variable`: Variable to process (required)
 - `--overwrite`: Overwrite existing output files (default: False)
-- `--cores`: Number of cores to use (default: auto-detect)
-- `--memory_limit`: Memory limit for Dask workers (default: 16GB)
 
-These arguments can be set explicitly when doing development, but otherwise they are set with defaults or are passed down via the job submission script. Here is an example, but again, this is **not** the recommended entry point to this pipeline. However, this pathway is useful for testing and isolating the core logic from any and all SLURM orchestration:
+Dask configuration is handled through environment variables via the centralized config system. For example:
 
 ```bash
-python process_single_variable.py \
-    --year 1980 \
-    --variable t2_mean \
-    --cores 24 \
-    --memory_limit "85GB"
+# Basic usage
+python process_single_variable.py --year 1980 --variable t2_mean
+
+# With custom Dask configuration via environment variables
+export ERA5_DASK_CORES=12
+python process_single_variable.py --year 1980 --variable t2_mean
 ```
-
-Some of these options may be deprecated in the future to reduce the overall configuration surface area.
-
-## Configuration and Environment Variables
-
-Default values are generated via `config.py` reading environment variables, and an attempt has been made to provide sensible defaults assuming a Chinook BEEGFS file system. The following environment variables can be set to override defaults:
-
-- `ERA5_INPUT_DIR`: Input directory (default: "/beegfs/CMIP6/wrf_era5/04km")
-- `ERA5_OUTPUT_DIR`: Output directory (default: "/beegfs/CMIP6/cparr4/daily_downscaled_era5_for_rasdaman")
-- `ERA5_START_YEAR`: Start year (default: 1960)
-- `ERA5_END_YEAR`: End year (default: 2020)
-- `ERA5_DATA_VARS`: Comma-separated list of variables to process (default: t2 min/mean/max trio)
-- `ERA5_INPUT_PATTERN`: File pattern for input files (default: "era5_wrf_dscale_4km_{date}.nc")
-- `GEO_EM_FILE`: Path to WRF geo_em file (default: "/beegfs/CMIP6/wrf_era5/geo_em.d02.nc")
 
 ## Monitoring Progress
 
-One log file per variable/year is written to the `logs` directory.There is also a log for the job submission. Note that the logging here isn't ultra-tidy because there is duplication of content between the python log files (`logs/$variable_id/*.log`) and the SLURM log files (`era5_process/$variable_id/*.out`). But, this is OK for now because we want logging when debugging (just running the Python worker script with no SLURM in the loop) and when scheduling with SLURM. In the SLURM log files you'll see which node is being used for the computation.
+Job logs are written to the `logs/era5_process/` directory with one SLURM log file per variable/year combination. All output is captured in the SLURM log files.
 
 To check the status of your job submissions:
 
@@ -113,16 +137,37 @@ watch squeue --me
 To tail the logs:
 
 ```bash
-tail -f logs/variable_id/*.out
+tail -f logs/era5_process/$variable_id/*.out
 ```
 
-The link to the Dask client dashboard is written to the log - but port forwarding and using the dashboard to monitor progress isn't very useful because the individual jobs execute rather quickly.
+Logs will get wiped at the start of each run, so if you want past logs to persist, move them elsewhere.
 
-There is a memory monitoring utility (`utils/memory.py`) that logs memory usage every few seconds. The spirit of this endeavor is to have continuous visibility into memory usage throughout the processing pipeline to help identify bottlenecks if/when Dask goes off the rails.
+## Automatic Retry System
+
+The pipeline includes an automatic retry system, handled directly within the `submit_era5_jobs.py` script. This system detects and resubmits failed jobs without manual intervention, which is particularly useful for handling occasional SLURM timeouts or transient failures. This is based on scanning the logs after all jobs are completed, so this is why logs get wiped after each run. Also, if you have other jobs running under your user (like a QC notebook on a compute node), this may not function because it is waiting for all jobs to complete.
+
+### How It Works
+
+When you run `submit_era5_jobs.py` (and if the `--no_retry` flag is not used):
+
+1.  After the initial batch of jobs is submitted and completes, the script waits for all queued jobs to finish.
+2.  **Scans SLURM log files**: It then inspects the `.out` log files located in `logs/era5_process/<variable_name>/` for SLURM timeout messages (specifically, lines containing "CANCELLED AT" and "DUE TO TIME LIMIT").
+3.  **Resubmits timed-out jobs**: Any job identified as having timed out is automatically resubmitted using the same sbatch command.
+4.  **Final Validation**: After any retries, a validation step checks for the existence and integrity of the expected output NetCDF files.
+
+### Example Output
+
+When `submit_era5_jobs.py` initiates a retry for a timed-out job, you will see log messages similar to this:
+
+```
+INFO - Timeout detected for t2_mean year 1978
+INFO - RETRY: Submitting t2_mean 1978
+INFO - RETRY: Submitted job <job_id> for t2_mean year 1978
+```
 
 ## Output Specs
 
-The processed data will be saved in the specified output directory (default: from config.py) with the following structure:
+The processed data will be saved in the specified output directory with the following structure:
 
 ```
 <output_dir>/
@@ -140,17 +185,48 @@ Each NetCDF file contains the processed data for one variable and one year, with
 - Daily frequency (aggregated from hourly data)
 - 4 km spatial resolution
 - EPSG:3338 Alaska Albers projection
-- Mode compression applied for reduced file size
-- CF compliant (mostly)
+- Some compression applied for reduced file size
+- CF compliant where possible
 
 ## Troubleshooting
 
-Common issues and solutions:
-
-- **Job fails with out-of-memory error**: Increase the memory in the sbatch script or adjust chunk sizes in `process_single_variable.py`
-- **Processing is slow**: Adjust the chunk sizes or increase the CPU cores
-- **Job times out**: Increase the time limit in the sbatch script
+- **Processing is slow**: Adjust the chunk sizes or batch sizes, or increase CPU cores via `ERA5_DASK_CORES` environment variable
+- **Too many jobs time out**: Increase the time limit in the sbatch script
 - **Too many jobs in queue**: Decrease the `--max_concurrent` parameter
 - **Missing variable**: Check that the variable name is correct and exists in `era5_variables.py`
 - **RecursionError**: Increase the recursion limit in the `dask_utils` parameter module
-- **OOM killed by SLURM**: Increase memory allocation in sbatch script or reduce chunk sizes
+- **OOM killed by SLURM**: Increase memory allocation in the sbatch script (`#SBATCH --mem`). Dask automatically uses a portion (typically 90%) of this. Ensure the SLURM allocation is sufficiently higher (15-25%) than Dask's expected peak usage. Reducing batch size (`ERA5_BATCH_SIZE`) or, for very large datasets, considering a reduction in Dask cores (`ERA5_DASK_CORES`) to decrease memory pressure per core might also help.
+
+# ERA5 Pipeline Default Configuration Values
+
+| Configuration Variable | Default Value | Source of Default | Description |
+|------------------------|---------------|---------|-------------|
+| `ERA5_INPUT_DIR` | `/beegfs/CMIP6/wrf_era5/04km` | Hardcoded | Input directory containing ERA5 data |
+| `ERA5_OUTPUT_DIR` | `/beegfs/CMIP6/$USER/daily_downscaled_era5_for_rasdaman` | Hardcoded | Output directory for processed files |
+| `ERA5_START_YEAR` | `1960` | Hardcoded | Start year for processing |
+| `ERA5_END_YEAR` | `2020` | Hardcoded | End year for processing |
+| `ERA5_DATA_VARS` | `t2_mean,t2_min,t2_max` | Hardcoded | Default variables to process |
+| `ERA5_BATCH_SIZE` | `90` | Hardcoded | Files per batch (range: 2-365) |
+| `ERA5_DASK_CORES` | Auto-detect | Code/Auto-detect (via SLURM or `os.cpu_count()`); Env var overrides. | Number of cores for Dask workers |
+| `ERA5_DASK_TASK_TYPE` | `io_bound` | Code (defaults to `io_bound` in `config.py`); Env var overrides. | Task type for Dask optimization |
+
+The default configuration values are based on some basic profiling. 
+
+### Dask Memory Configuration
+
+Dask's total memory for its worker pool is configured to use a fixed fraction (**90%**) of the total memory available to the job. The total memory is determined by the SLURM allocation (`#SBATCH --mem`) or an internal 64GB default if not in a SLURM environment.
+
+For example, the `process_era5_variable.sbatch` script now requests 96GB from SLURM. Dask will see this 96GB as the total available memory and allocate its worker pool with 90% of it, which is approximately 86GB. This leaves a robust ~10GB buffer for system overhead. This approach is simpler and more stable than previous configurations.
+
+### Dask Task Type Configuration
+
+The `ERA5_DASK_TASK_TYPE` parameter controls how Dask constructs the cluster. It only affects the number of workers and the number of threads per worker; it does not change the memory allocation strategy.
+
+- **io_bound** (default): Optimized for I/O operations, more workers with fewer threads per worker
+- **balanced**: Balanced approach for mixed workloads
+- **compute_bound**: Optimized for CPU-intensive tasks, fewer workers with more threads
+
+### Batch Size Configuration
+
+The `ERA5_BATCH_SIZE` parameter controls how many files are processed together in memory:
+- **Valid Range**: 2-365 files

@@ -4,7 +4,7 @@
 #SBATCH --ntasks=1
 #SBATCH --cpus-per-task=24
 #SBATCH --mem=96G
-#SBATCH --time=1:00:00
+#SBATCH --time=00:10:00
 #SBATCH --partition=t2small
 #SBATCH --output=logs/era5_process/%x_%j.out
 
@@ -54,8 +54,6 @@ fi
 python process_single_variable.py \
     --year $YEAR \
     --variable $VARIABLE \
-    --cores $SLURM_CPUS_PER_TASK \
-    --memory_limit "85GB" \
     $OVERWRITE_FLAG
 # Check the exit status
 if [ $? -eq 0 ]; then

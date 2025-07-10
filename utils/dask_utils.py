@@ -18,6 +18,26 @@ from utils.logging import get_logger
 # Get a named logger for this module
 logger = get_logger(__name__)
 
+# Task type constants
+TASK_TYPE_IO = "io_bound"
+TASK_TYPE_COMPUTE = "compute_bound"
+TASK_TYPE_BALANCED = "balanced"
+
+VALID_TASK_TYPES = [TASK_TYPE_IO, TASK_TYPE_COMPUTE, TASK_TYPE_BALANCED]
+
+def validate_memory_string(memory_limit: str) -> bool:
+    """Validate memory string format.
+    
+    Args:
+        memory_limit: Memory limit string to validate
+        
+    Returns:
+        True if format is valid, False otherwise
+    """
+    if not isinstance(memory_limit, str):
+        return False
+    pattern = r'^\d+(\.\d+)?(B|KB|MB|GB)$'
+    return bool(re.match(pattern, memory_limit.upper()))
 
 def calculate_worker_config(cores: int, task_type: str = "balanced") -> Tuple[int, int]:
     """Calculate optimal worker count and threads per worker based on core count and task type.
@@ -36,8 +56,8 @@ def calculate_worker_config(cores: int, task_type: str = "balanced") -> Tuple[in
     """
     if task_type == "io_bound":
         # More workers with fewer threads for I/O operations
-        worker_count = min(cores, 12)  # Up to 12 workers, but no more than cores
-        threads_per_worker = max(1, cores // worker_count)
+        worker_count = min(cores, 12)  # 12 workers × 2 threads each @ 24 cores
+        threads_per_worker = max(2, cores // worker_count)
     elif task_type == "compute_bound":
         # Fewer workers with more threads for computation
         worker_count = max(4, cores // 4)  # At least 4 workers
@@ -73,14 +93,14 @@ def calculate_worker_memory(total_memory_gb: float, n_workers: int, task_type: s
     # Calculate memory based on task type
     if task_type == "io_bound":
         # I/O tasks typically need less memory
-        worker_fraction = 0.7  # Use 70% of available memory
-        memory_factor = 0.8    # Each worker gets less memory
+        worker_fraction = 0.5  # Use 50% of available memory
+        memory_factor = 0.7    # Each worker gets less memory
     elif task_type == "compute_bound":
         # Compute tasks may need more memory
         worker_fraction = 0.8  # Use 80% of available memory
-        memory_factor = 1.2    # Each worker gets more memory
+        memory_factor = 1.3    # Each worker gets more memory
     else:  # balanced
-        worker_fraction = 0.75  # Use 75% of available memory
+        worker_fraction = 0.65  # Use 65% of available memory
         memory_factor = 1.0    # Standard memory allocation
     
     # Calculate memory per worker with task-specific adjustments
@@ -96,24 +116,36 @@ def calculate_worker_memory(total_memory_gb: float, n_workers: int, task_type: s
 
 
 def get_dask_client(cores: Optional[int] = None, 
-                   memory_limit: str = "16GB", 
-                   task_type: str = "balanced") -> Tuple[Client, LocalCluster]:
+                   task_type: str = "io_bound") -> Tuple[Client, LocalCluster]:
     """Set up a Dask LocalCluster and Client optimized for specific task types.
     
-    Automatically determines optimal worker count, threads per worker, and
-    memory allocation based on available resources and the type of task:
-    - "io_bound": Optimized for I/O operations (more workers, less memory per worker)
-    - "compute_bound": Optimized for computation (fewer workers, more threads and memory)
-    - "balanced": Balanced configuration for mixed workloads
+    Automatically determines optimal worker count and threads per worker based on
+    available resources and the type of task (`io_bound`, `compute_bound`, `balanced`).
+    The choice of task type only affects the number of workers and threads, not
+    the memory allocation.
+    
+    Memory is automatically detected from SLURM allocation (using 90% of
+    SLURM_MEM_PER_NODE) or defaults to 64GB for non-SLURM environments. Dask
+    workers are always allocated 90% of this available memory.
     
     Args:
         cores: Number of cores to use (None for auto-detect)
-        memory_limit: Total memory limit across all workers
-        task_type: Type of task being performed
+        task_type: Type of task being performed (default: io_bound)
     
     Returns:
         Tuple of (Client, LocalCluster)
     """
+    # Auto-detect memory from SLURM if available
+    memory_limit = "64GB"  # Default fallback
+    if "SLURM_MEM_PER_NODE" in os.environ:
+        slurm_mem_mb = int(os.environ["SLURM_MEM_PER_NODE"])
+        slurm_mem_gb = slurm_mem_mb / 1024
+        # Use 100% of SLURM allocation as the total available memory
+        memory_limit = f"{int(slurm_mem_gb)}GB"
+        logger.info(f"Detected memory from SLURM: {memory_limit}")
+    else:
+        logger.info(f"Using default memory limit: {memory_limit}")
+    
     # For SLURM jobs, use the allocated resources
     if "SLURM_JOB_ID" in os.environ:
         # If SLURM_CPUS_PER_TASK is set, use that for the number of cores
@@ -121,12 +153,6 @@ def get_dask_client(cores: Optional[int] = None,
             slurm_cores = int(os.environ["SLURM_CPUS_PER_TASK"])
             cores = slurm_cores if cores is None else min(cores, slurm_cores)
             logger.info(f"Using {cores} cores from SLURM allocation")
-        
-        # Check for memory allocation in SLURM
-        if "SLURM_MEM_PER_NODE" in os.environ:
-            slurm_mem_mb = int(os.environ["SLURM_MEM_PER_NODE"])
-            slurm_mem_gb = slurm_mem_mb / 1024
-            logger.info(f"SLURM memory allocation: {slurm_mem_gb:.1f}GB")
     
     # If cores is still None, use CPU count
     if cores is None:
@@ -149,8 +175,12 @@ def get_dask_client(cores: Optional[int] = None,
     else:
         memory_gb = float(memory_limit) / (1024 * 1024 * 1024)
     
-    # Calculate memory per worker
-    memory_per_worker = calculate_worker_memory(memory_gb, n_workers, task_type)
+    # Define a single, universal memory fraction for the Dask worker pool
+    DASK_MEMORY_FRACTION = 0.90
+    worker_pool_memory_gb = memory_gb * DASK_MEMORY_FRACTION
+    
+    # Calculate memory per worker based on the fixed fraction
+    memory_per_worker = f"{int(worker_pool_memory_gb / n_workers)}GB"
     
     # Set up a local cluster with appropriate resources
     cluster = LocalCluster(

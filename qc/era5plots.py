@@ -22,7 +22,10 @@ def point_locations_to_test(lat_lon_di):
 
 
 def list_files_for_variable(var_id):
+    
+    # this will be updated to a default or read from an env var config later on
     data_dir = f"/beegfs/CMIP6/cparr4/daily_downscaled_era5_for_rasdaman/{var_id}"
+    #
     file_pattern = os.path.join(data_dir, f"{var_id}_*_era5_4km_3338.nc")
     file_list = sorted(glob.glob(file_pattern))
     return file_list
@@ -114,8 +117,8 @@ def plot_point_extraction_time_series_small_multiples(locations, df, attrs, tag,
     if unit == "degree_C":
         unit = "°C"
     
-    # Create figure with 4 rows and 3 columns
-    fig, axes = plt.subplots(nrows=4, ncols=3, figsize=(18, 20), sharex=True, sharey=True)
+    # Create figure with 3 rows and 3 columns
+    fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(13, 13), sharex=True, sharey=True)
     fig.suptitle(f"ERA5 4km - {desc}", fontsize=17, y=1.01)
     
     axes = axes.flatten()
@@ -219,7 +222,7 @@ def plot_point_extraction_time_series_small_multiples_multi(
     if unit == "degree_C":
         unit = "°C"
 
-    fig, axes = plt.subplots(nrows=4, ncols=3, figsize=(20, 20), sharex=True, sharey=True)
+    fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(12, 12), sharex=True, sharey=True)
     fig.suptitle(f"ERA5 Trends by Location\n{', '.join(var_ids)}", fontsize=16, y=1.02)
     axes = axes.flatten()
 
@@ -297,7 +300,7 @@ def plot_daily_normals_two_periods(
     clim1 = extract_daily_climatology(points_da, period_1)
     clim2 = extract_daily_climatology(points_da, period_2)
 
-    fig, axes = plt.subplots(nrows=4, ncols=3, figsize=(18, 20), sharex=True, sharey=True)
+    fig, axes = plt.subplots(nrows=3, ncols=3, figsize=(12, 12), sharex=True, sharey=True)
     axes = axes.flatten()
 
     unit = ds_attrs["units"]

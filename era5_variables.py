@@ -17,6 +17,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "degree_C",
         "agg_func": lambda x: x.mean(dim="Time") - 273.15,
         "description": "Daily mean temperature at 2 meters",
+        "cell_methods": "time: mean",
     },
     "t2_min": {
         "var_id": "T2",
@@ -25,6 +26,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "degree_C",
         "agg_func": lambda x: x.min(dim="Time") - 273.15,
         "description": "Daily minimum temperature at 2 meters",
+        "cell_methods": "time: minimum",
     },
     "t2_max": {
         "var_id": "T2",
@@ -33,14 +35,16 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "degree_C",
         "agg_func": lambda x: x.max(dim="Time") - 273.15,
         "description": "Daily maximum temperature at 2 meters",
+        "cell_methods": "time: maximum",
     },
     "rainnc_sum": {
         "var_id": "rainnc",
         "short_name": "prnc",
         "standard_name": "precipitation_amount",
-        "units": "mm", # equivalent to, but not the CF standard unit (kg m-2)
+        "units": "mm",  # equivalent to, but not the CF standard unit (kg m-2)
         "agg_func": lambda x: x.sum(dim="Time"),
         "description": "Daily accumulated total grid-scale precipitation",
+        "cell_methods": "time: sum",
     },
     "wspd10_mean": {
         "var_id": "wspd10",
@@ -49,6 +53,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "m s-1",
         "agg_func": lambda x: x.mean(dim="Time"),
         "description": "Daily mean 10m wind speed",
+        "cell_methods": "time: mean",
     },
     "wspd10_max": {
         "var_id": "wspd10",
@@ -57,6 +62,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "m s-1",
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum 10m wind speed",
+        "cell_methods": "time: maximum",
     },
     "wdir10_mean": {
         "var_id": "wdir10",
@@ -65,6 +71,43 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "degree",
         "agg_func": calc_circular_mean_wind_dir,
         "description": "Daily mean 10m wind direction",
+        "cell_methods": "time: mean",
+    },
+    "rh2_mean": {
+        "var_id": "rh2",
+        "short_name": "rh2m",
+        "standard_name": "relative_humidity",
+        "units": "%",
+        "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean 2m relative humidity",
+        "cell_methods": "time: mean",
+    },
+    "rh2_min": {
+        "var_id": "rh2",
+        "short_name": "rh2m",
+        "standard_name": "relative_humidity",
+        "units": "%",
+        "agg_func": lambda x: x.min(dim="Time"),
+        "description": "Daily minimum 2m relative humidity",
+        "cell_methods": "time: minimum",
+    },
+    "rh2_max": {
+        "var_id": "rh2",
+        "short_name": "rh2m",
+        "standard_name": "relative_humidity",
+        "units": "%",
+        "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum 2m relative humidity",
+        "cell_methods": "time: maximum",
+    },
+    "seaice_max": {
+        "var_id": "SEAICE",
+        "short_name": "siconc",
+        "standard_name": "sea_ice_area_fraction",
+        "units": "1", # CF standard unit for fractional area, but "1" as a unit is sorta confusing
+        "agg_func": lambda x: x.max(dim="Time"),
+        "description": "Daily maximum sea ice area fraction",
+        "cell_methods": "time: maximum",
     },
     "slp_mean": {
         "var_id": "slp",
@@ -105,30 +148,6 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "units": "dBZ",
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum radar reflectivity",
-    },
-    "rh2_mean": {
-        "var_id": "rh2",
-        "short_name": "rh2m",
-        "standard_name": "relative_humidity",
-        "units": "%",
-        "agg_func": lambda x: x.mean(dim="Time"),
-        "description": "Daily mean 2m relative humidity",
-    },
-    "rh2_min": {
-        "var_id": "rh2",
-        "short_name": "rh2m",
-        "standard_name": "relative_humidity",
-        "units": "%",
-        "agg_func": lambda x: x.min(dim="Time"),
-        "description": "Daily minimum 2m relative humidity",
-    },
-    "rh2_max": {
-        "var_id": "rh2",
-        "short_name": "rh2m",
-        "standard_name": "relative_humidity",
-        "units": "%",
-        "agg_func": lambda x: x.max(dim="Time"),
-        "description": "Daily maximum 2m relative humidity",
     },
     "q2_mean": {
         "var_id": "Q2",
@@ -514,14 +533,6 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum soil temperature",
     },
-    "seaice_max": {
-        "var_id": "SEAICE",
-        "short_name": "siconc",
-        "standard_name": "sea_ice_area_fraction",
-        "units": "1",
-        "agg_func": lambda x: x.max(dim="Time"),
-        "description": "Daily maximum sea ice area fraction",
-    },
     "sst_mean": {
         "var_id": "SST",
         "short_name": "tos",
@@ -559,10 +570,10 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
 
 def get_variable_info(variable_name: str) -> Optional[Dict[str, Any]]:
     """Get information about a variable.
-    
+
     Args:
         variable_name: The name of the variable to find
-        
+
     Returns:
         Variable information dict or None if not found
     """
@@ -571,7 +582,7 @@ def get_variable_info(variable_name: str) -> Optional[Dict[str, Any]]:
 
 def list_all_variables() -> List[str]:
     """List all available variables.
-    
+
     Returns:
         List of all variable names
     """
@@ -580,36 +591,43 @@ def list_all_variables() -> List[str]:
 
 def validate_variable_request(variable_name: str) -> Tuple[bool, str]:
     """Validate a variable request, suggesting alternatives if not found.
-    
+
     Args:
         variable_name: The name of the variable to validate
-        
+
     Returns:
         Tuple of (is_valid, message)
     """
     if not variable_name:
         return False, "No variable name provided"
-        
+
     if variable_name in era5_datavar_lut:
         return True, f"Variable '{variable_name}' found"
-    
+
     # If not found, suggest alternatives
     all_vars = list_all_variables()
     # Find similar variable names
-    similar = [v for v in all_vars if variable_name.lower() in v.lower() or v.lower() in variable_name.lower()]
-    
+    similar = [
+        v
+        for v in all_vars
+        if variable_name.lower() in v.lower() or v.lower() in variable_name.lower()
+    ]
+
     if similar:
-        return False, f"Variable '{variable_name}' not found. Did you mean one of: {', '.join(similar)}?"
+        return (
+            False,
+            f"Variable '{variable_name}' not found. Did you mean one of: {', '.join(similar)}?",
+        )
     else:
         return False, f"Variable '{variable_name}' not found in available variables."
 
 
 def get_source_variables(variable_names: List[str]) -> Set[str]:
     """Get the set of unique source variables needed for the requested variables.
-    
+
     Args:
         variable_names: List of variable names to process
-        
+
     Returns:
         Set of source variable IDs
     """
