@@ -14,7 +14,6 @@ import sys
 import time
 from pathlib import Path
 
-from config import tmy_config
 from utils.logging import get_logger, setup_variable_logging
 
 logger = get_logger(__name__)
@@ -34,11 +33,6 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=2020,
         help="End year for TMY calculation (default: 2020)",
-    )
-    parser.add_argument(
-        "--no_wait",
-        action="store_true",
-        help="Don't wait for jobs to complete (just submit and exit)",
     )
 
     return parser.parse_args()
@@ -96,7 +90,6 @@ def submit_stitch_job(array_job_id: str, start_year: int, end_year: int) -> str:
         array_job_id: Job ID of the monthly array
         start_year: Start year
         end_year: End year
-        spatial_subset: Optional spatial subset dict
 
     Returns:
         Job ID of the stitching job
@@ -239,12 +232,10 @@ def main() -> None:
         logger.info("")
         logger.info(f"  Monitor: watch squeue -j {array_job_id},{stitch_job_id}")
         logger.info(f"  Cancel: scancel {array_job_id},{stitch_job_id}")
-        logger.info(f"  Logs: ls -lh logs/era5_tmy/")
+        logger.info("  Logs: ls -lh logs/era5_tmy/")
         logger.info("=" * 60)
 
-        # Wait for completion if requested
-        if not args.no_wait:
-            wait_for_completion(array_job_id, stitch_job_id)
+        wait_for_completion(array_job_id, stitch_job_id)
 
         sys.exit(0)
 

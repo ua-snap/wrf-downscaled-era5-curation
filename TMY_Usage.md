@@ -35,18 +35,6 @@ python submit_tmy_parallel.py \
     --end_year 2012 \
 ```
 
-**Expected Runtime:** 5-10 minutes per month, ~10-15 minutes total
-**Memory:** 32GB per month job, 64GB for stitching
-
-### 3. No-Wait Mode (Submit and Exit)
-
-```bash
-python submit_tmy_parallel.py \
-    --start_year 2010 \
-    --end_year 2020 \
-    --no_wait
-```
-
 ## File Structure
 
 ### Input Files
