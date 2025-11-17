@@ -3,14 +3,15 @@
 This module handles configuration through environment variables with sensible defaults.
 """
 
+import logging
 from dataclasses import dataclass, field
 from datetime import datetime
-import logging
 from os import getenv
 from pathlib import Path
 from typing import List, Optional
 
 logger = logging.getLogger(__name__)
+
 
 def _parse_cores_env_var() -> Optional[int]:
     """Parse ERA5_DASK_CORES environment variable with validation.
@@ -34,6 +35,7 @@ def _parse_cores_env_var() -> Optional[int]:
     except ValueError as e:
         raise ValueError(f"Invalid ERA5_DASK_CORES value '{cores_str}': {e}")
 
+
 def _get_data_vars() -> List[str]:
     """Get data variables from environment or default to a subset of available variables."""
     env_vars = getenv("ERA5_DATA_VARS", "")
@@ -41,6 +43,7 @@ def _get_data_vars() -> List[str]:
         return [x.strip() for x in env_vars.split(",") if x.strip()]
     else:
         return ["t2_mean", "t2_min", "t2_max"]
+
 
 def _parse_float_env(env_var_name: str) -> Optional[float]:
     """Parse optional float environment variable.
@@ -63,10 +66,12 @@ def _parse_float_env(env_var_name: str) -> Optional[float]:
     except ValueError as e:
         raise ValueError(f"Invalid {env_var_name} value '{value_str}': {e}")
 
+
 # Using a frozen dataclass to ensure that the config is immutable
 @dataclass(frozen=True)
 class DataLocationConfig:
     """Configuration for all data paths and input file name patterns."""
+
     input_dir: Path
     output_dir: Path
     tmy_output_dir: Path
@@ -77,18 +82,18 @@ class DataLocationConfig:
     DEFAULT_PATHS = {
         "input_dir": "/beegfs/CMIP6/wrf_era5/04km",
         "output_dir": "/beegfs/CMIP6/$USER/daily_downscaled_era5_for_rasdaman",
-        "tmy_output_dir": "/beegfs/CMIP6/cparr4/era5wrf_tmy"
+        "tmy_output_dir": "/beegfs/CMIP6/$USER/era5wrf_tmy",
     }
 
     def __post_init__(self):
         """Derive geo_file path after initialization."""
         # Use object.__setattr__ because the dataclass is frozen
-        object.__setattr__(self, 'geo_file', self.input_dir.parent / 'geo_em.d02.nc')
+        object.__setattr__(self, "geo_file", self.input_dir.parent / "geo_em.d02.nc")
 
     # why a classmethod?
     # because we want to be able to create an instance of the class without having to pass in all the arguments
     @classmethod
-    def from_env(cls, require_env_vars: bool = True) -> 'DataLocationConfig':
+    def from_env(cls, require_env_vars: bool = True) -> "DataLocationConfig":
         """Create configuration from environment variables.
 
         Args:
@@ -134,7 +139,7 @@ class DataLocationConfig:
         return cls(
             input_dir=Path(input_dir),
             output_dir=Path(output_dir),
-            tmy_output_dir=Path(tmy_output_dir)
+            tmy_output_dir=Path(tmy_output_dir),
         )
 
     def validate(self) -> None:
@@ -142,7 +147,9 @@ class DataLocationConfig:
         if not self.input_dir.exists():
             raise ValueError(f"Input directory does not exist: {self.input_dir}")
         if not self.geo_file.exists():
-            raise ValueError(f"Derived geo grid file path does not exist: {self.geo_file}")
+            raise ValueError(
+                f"Derived geo grid file path does not exist: {self.geo_file}"
+            )
         self.output_dir.mkdir(parents=True, exist_ok=True)
         self.tmy_output_dir.mkdir(parents=True, exist_ok=True)
 
@@ -163,6 +170,7 @@ class DataLocationConfig:
         file = self.get_output_file(variable, year)
         return file.exists() and file.stat().st_size > 0
 
+
 @dataclass(frozen=True)
 class DaskConfig:
     """Configuration for Dask compute settings.
@@ -174,6 +182,7 @@ class DaskConfig:
     Memory is automatically detected from SLURM allocation (90% of SLURM_MEM_PER_NODE)
     or defaults to 64GB for non-SLURM environments.
     """
+
     # ERA5_DASK_CORES environment variable takes precedence over auto-detection.
     # Configuration pathway:
     # 1. If ERA5_DASK_CORES is set: use that value (after validation)
@@ -181,9 +190,7 @@ class DaskConfig:
     # 3. dask_utils.get_dask_client() handles auto-detection:
     #    - First tries SLURM_CPUS_PER_TASK if in SLURM environment
     #    - Falls back to os.cpu_count() if no SLURM allocation
-    cores: Optional[int] = field(
-        default_factory=lambda: _parse_cores_env_var()
-    )
+    cores: Optional[int] = field(default_factory=lambda: _parse_cores_env_var())
     task_type: str = field(
         default_factory=lambda: getenv("ERA5_DASK_TASK_TYPE", "io_bound")
     )
@@ -203,6 +210,7 @@ class DaskConfig:
                 f"Must be one of: {VALID_TASK_TYPES}"
             )
 
+
 def _validate_batch_size(batch_size: int) -> None:
     """Validate batch size with performance guidance.
 
@@ -221,7 +229,9 @@ def _validate_batch_size(batch_size: int) -> None:
         ValueError: If batch size is outside valid range (2-365)
     """
     if not isinstance(batch_size, int):
-        raise ValueError(f"Batch size must be an integer, got: {type(batch_size).__name__}")
+        raise ValueError(
+            f"Batch size must be an integer, got: {type(batch_size).__name__}"
+        )
 
     if batch_size < 2:
         raise ValueError(
@@ -235,6 +245,7 @@ def _validate_batch_size(batch_size: int) -> None:
             "Large batch sizes can cause memory issues and Dask hangs."
         )
 
+
 @dataclass
 class Config:
     """Configuration settings for the processing pipeline.
@@ -245,6 +256,7 @@ class Config:
         ERA5_DATA_VARS: Comma-separated list of variables (default: t2_mean,t2_min,t2_max)
         ERA5_BATCH_SIZE: Number of files to process per batch (default: 90)
     """
+
     # Time range settings
     START_YEAR: int = int(getenv("ERA5_START_YEAR", "1960"))
     END_YEAR: int = int(getenv("ERA5_END_YEAR", "2020"))
@@ -269,6 +281,7 @@ class Config:
         if not self.START_YEAR <= self.END_YEAR <= current_year:
             raise ValueError(f"END_YEAR must be between START_YEAR and {current_year}")
 
+
 @dataclass
 class TMYConfig:
     """Configuration for TMY (Typical Meteorological Year) processing.
@@ -278,6 +291,7 @@ class TMYConfig:
         TMY_END_YEAR: End year for TMY calculation (default: 2020)
 
     """
+
     # default time range to most recent decade
     TMY_START_YEAR: int = int(getenv("TMY_START_YEAR", "2010"))
     TMY_END_YEAR: int = int(getenv("TMY_END_YEAR", "2020"))
@@ -327,6 +341,7 @@ class TMYConfig:
         """
         # not strictly necessary, but good for dev file inspection
         return self.get_tmy_output_dir() / "intermediate"
+
 
 # create global instances, toggle to true to strictly require require environment variables
 data_config = DataLocationConfig.from_env(require_env_vars=False)
