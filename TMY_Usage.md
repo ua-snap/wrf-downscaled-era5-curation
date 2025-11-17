@@ -28,8 +28,10 @@ The parallel TMY processing system splits the workload by calendar month, allowi
 ```
 
 ## Quick Start
+From any Chinook node:
 
 ```bash
+conda activate snap-geo
 python submit_tmy_parallel.py \
     --start_year 2010 \
     --end_year 2012 \
@@ -59,7 +61,7 @@ python submit_tmy_parallel.py \
 ## Manual Execution for Development
 
 ### Python Worker Scripts
-
+Be sure to use a compute node like `t2small` to run the worker scripts in isolation.
 #### Process Single Month, Test Worker Script in Isolation
 ```bash
 python process_tmy_month.py \
