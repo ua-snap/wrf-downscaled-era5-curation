@@ -35,25 +35,14 @@ export OMP_NUM_THREADS=$SLURM_CPUS_PER_TASK
 # Get command line arguments
 START_YEAR=${1:-2010}
 END_YEAR=${2:-2020}
-SPATIAL_SUBSET_FLAG=$3  # "subset" or empty
 
 # Create log directory
 mkdir -p logs/era5_tmy
-
-# Set environment variables
-export ERA5_INPUT_DIR=/beegfs/CMIP6/wrf_era5/04km
-export ERA5_OUTPUT_DIR=/beegfs/CMIP6/cparr4/era5_tmy
 
 echo "Stitching TMY for years $START_YEAR to $END_YEAR"
 
 # Build command
 CMD="python stitch_tmy.py --start_year $START_YEAR --end_year $END_YEAR"
-
-# Add spatial subset flag if provided
-if [ "$SPATIAL_SUBSET_FLAG" = "subset" ]; then
-    echo "Processing spatial subset files"
-    CMD="$CMD --spatial_subset"
-fi
 
 # Run the Python script
 echo "Executing: $CMD"
@@ -63,14 +52,11 @@ $CMD
 if [ $? -eq 0 ]; then
     echo "TMY stitching completed successfully at $(date)"
     echo "=========================================="
-    echo "FINAL TMY FILE READY!"
+    echo "FINAL TMY FILE READY AYooooo"
     echo "=========================================="
 else
     EXIT_CODE=$?
     echo "TMY stitching failed with exit code $EXIT_CODE at $(date)"
-    if [ $EXIT_CODE -eq 137 ] || [ $EXIT_CODE -eq 9 ]; then
-        echo "This appears to be a memory-related failure."
-    fi
     exit $EXIT_CODE
 fi
 
