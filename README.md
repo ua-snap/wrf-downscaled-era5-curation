@@ -30,12 +30,13 @@ The pipeline uses environment variables for configuration, with sensible default
 ### Required Environment Variables
 - `ERA5_INPUT_DIR`: Input directory containing ERA5 data (default: "/beegfs/CMIP6/wrf_era5/04km")
 - `ERA5_OUTPUT_DIR`: Output directory for processed files (default: "/beegfs/CMIP6/cparr4/daily_downscaled_era5_for_rasdaman")
+- `ERA5_RESOLUTION`: Spatial resolution of ERA5 input data, in kilometers (default: 4)
 
 **WRF `geo_em` File Path**
 The path to the WRF projection file (`geo_em.d02.nc`) is automatically derived from the `ERA5_INPUT_DIR` path. The **assumption:** is that the `geo_em.d02.nc` file is located exactly one directory level above the `ERA5_INPUT_DIR`. For example, if `ERA5_INPUT_DIR` is set to `/beegfs/CMIP6/wrf_era5/04km`, the pipeline will automatically look for the geo file at `/beegfs/CMIP6/wrf_era5/geo_em.d02.nc`. The processing will fail if this file is not found at the derived location.
 
 **Input File Naming Convention**
-The pattern for input data files is assumed to be `era5_wrf_dscale_4km_{date}.nc`, where `{date}` is the date string (e.g., `1980-01-01`).
+The pattern for input data files is assumed to be `era5_wrf_dscale_{resolution}km_{date}.nc`, where `{resolution}` is the spatial resolution determined by the `ERA5_RESOLUTION` environment variable (e.g., `4`), and `{date}` is the date string (e.g., `1980-01-01`).
 
 ### Optional Environment Variables
 - `ERA5_START_YEAR`: Start year for processing (default: 1960)
@@ -172,10 +173,10 @@ The processed data will be saved in the specified output directory with the foll
 ```
 <output_dir>/
   <variable1>/
-    <variable1>_<year>_daily_era5_4km_3338.nc
+    <variable1>_<year>_daily_era5_<resolution>km_3338.nc
     ...
   <variable2>/
-    <variable2>_<year>_daily_era5_4km_3338.nc
+    <variable2>_<year>_daily_era5_<resolution>km_3338.nc
     ...
   ...
 ```
@@ -203,6 +204,7 @@ Each NetCDF file contains the processed data for one variable and one year, with
 |------------------------|---------------|---------|-------------|
 | `ERA5_INPUT_DIR` | `/beegfs/CMIP6/wrf_era5/04km` | Hardcoded | Input directory containing ERA5 data |
 | `ERA5_OUTPUT_DIR` | `/beegfs/CMIP6/$USER/daily_downscaled_era5_for_rasdaman` | Hardcoded | Output directory for processed files |
+| `ERA5_RESOLUTION` | 4 | Hardcoded | Resolution mathcing default input directory |
 | `ERA5_START_YEAR` | `1960` | Hardcoded | Start year for processing |
 | `ERA5_END_YEAR` | `2020` | Hardcoded | End year for processing |
 | `ERA5_DATA_VARS` | `t2_mean,t2_min,t2_max` | Hardcoded | Default variables to process |

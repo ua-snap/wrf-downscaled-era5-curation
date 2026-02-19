@@ -48,14 +48,16 @@ class DataLocationConfig:
     """Configuration for all data paths and patterns."""
     input_dir: Path
     output_dir: Path
-    file_pattern: str = "era5_wrf_dscale_4km_{date}.nc"
+    resolution: int
+    file_pattern: str = "era5_wrf_dscale_{resolution}km_{date}.nc"
     geo_file: Path = field(init=False)
 
-    # Default Chinook paths - kept as documentation and development defaults
+    # Default Chinook paths and resolution - kept as documentation and development defaults
     DEFAULT_PATHS = {
-        "input_dir": "/beegfs/CMIP6/wrf_era5/04km",
+        "input_dir": "/beegfs/CMIP6/wrf_era5/{resolution:02d}km",
         "output_dir": "/beegfs/CMIP6/$USER/daily_downscaled_era5_for_rasdaman",
     }
+    DEFAULT_RESOLUTION = 4
 
     def __post_init__(self):
         """Derive geo_file path after initialization."""
@@ -72,7 +74,11 @@ class DataLocationConfig:
             require_env_vars: If True, raise error when env vars missing.
                             If False, use default Chinook paths.
         """
-        # Get paths from environment
+        # Get resolution from environment or default
+        resolution_env = getenv("ERA5_RESOLUTION")
+        resolution = int(resolution_env) if resolution_env is not None else cls.DEFAULT_RESOLUTION
+
+        # Get paths from environment or default, formatting with resolution
         input_dir = getenv("ERA5_INPUT_DIR")
         output_dir = getenv("ERA5_OUTPUT_DIR")
 
@@ -82,28 +88,31 @@ class DataLocationConfig:
                 missing.append("ERA5_INPUT_DIR")
             if not output_dir:
                 missing.append("ERA5_OUTPUT_DIR")
-            
+            if resolution_env is None:
+                missing.append("ERA5_RESOLUTION")
             if missing:
                 raise ValueError(
                     "Missing required environment variables:\n"
                     f"{', '.join(missing)}\n\n"
                     "These must be set before running the pipeline.\n"
                     f"Default paths on Chinook would be:\n"
-                    f"ERA5_INPUT_DIR={cls.DEFAULT_PATHS['input_dir']}\n"
-                    f"ERA5_OUTPUT_DIR={cls.DEFAULT_PATHS['output_dir']}"
+                    f"ERA5_INPUT_DIR={cls.DEFAULT_PATHS['input_dir'].format(resolution=cls.DEFAULT_RESOLUTION)}\n"
+                    f"ERA5_OUTPUT_DIR={cls.DEFAULT_PATHS['output_dir']}\n"
+                    f"ERA5_RESOLUTION={cls.DEFAULT_RESOLUTION}"
                 )
         else:
             logger.warning(
                 "Using default Chinook paths - this is not recommended for production!\n"
-                "Set ERA5_INPUT_DIR and ERA5_OUTPUT_DIR environment "
+                "Set ERA5_INPUT_DIR, ERA5_OUTPUT_DIR, and ERA5_RESOLUTION environment "
                 "variables to override defaults."
             )
-            input_dir = input_dir or cls.DEFAULT_PATHS["input_dir"]
+            input_dir = input_dir or cls.DEFAULT_PATHS["input_dir"].format(resolution=resolution)
             output_dir = output_dir or cls.DEFAULT_PATHS["output_dir"]
 
         return cls(
             input_dir=Path(input_dir),
             output_dir=Path(output_dir),
+            resolution=resolution,
         )
 
     def validate(self) -> None:
@@ -119,15 +128,15 @@ class DataLocationConfig:
         return self.input_dir / str(year)
 
     def get_output_file(self, variable: str, year: int) -> Path:
-        """Get output file path for a variable and year."""
-        return self.output_dir / variable / f"{variable}_{year}_daily_era5_4km_3338.nc"
+        """Get output file path for a variable and year using the configured resolution."""
+        return self.output_dir / variable / f"{variable}_{year}_daily_era5_{self.resolution}km_3338.nc"
 
     def get_variable_dir(self, variable: str) -> Path:
         """Get output directory for a specific variable."""
         return self.output_dir / variable
 
     def validate_output_file(self, variable: str, year: int) -> bool:
-        """Check if output file exists and is valid."""
+        """Check if output file exists and is valid for the configured resolution."""
         file = self.get_output_file(variable, year)
         return file.exists() and file.stat().st_size > 0
 
