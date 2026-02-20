@@ -207,7 +207,7 @@ def get_grid_info(tmp_file, geo_file):
     # wrf_proj = PolarStereographic(
     #     **{"TRUELAT1": geo_ds.attrs["TRUELAT1"], "STAND_LON": geo_ds.attrs["STAND_LON"]}
     # ).proj4()
-    # the +nadgrids=@null part is not needed for the reprojection we are doing, and causes issues with pyproj, so it was removed from the proj4 string.
+    # the +nadgrids=@null part causes issues with pyproj, so it was removed from the proj4 string.
     wrf_proj = "+proj=stere +units=m +a=6370000.0 +b=6370000.0 +lat_0=90.0 +lon_0=-152 +lat_ts=64"
 
     # WGS84 projection

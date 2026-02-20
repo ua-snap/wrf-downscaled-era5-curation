@@ -62,7 +62,14 @@ class DataLocationConfig:
     def __post_init__(self):
         """Derive geo_file path after initialization."""
         # Use object.__setattr__ because the dataclass is frozen
-        object.__setattr__(self, 'geo_file', self.input_dir.parent / 'geo_em.d02.nc')
+        # Select geo_em.d02.nc for 4km, geo_em.d01.nc for 12km
+        if self.resolution == 4:
+            geo_filename = 'geo_em.d02.nc'
+        elif self.resolution == 12:
+            geo_filename = 'geo_em.d01.nc'
+        else:
+            geo_filename = 'geo_em.d02.nc'  # Default/fallback
+        object.__setattr__(self, 'geo_file', self.input_dir.parent / geo_filename)
 
     # why a classmethod?
     # because we want to be able to create an instance of the class without having to pass in all the arguments

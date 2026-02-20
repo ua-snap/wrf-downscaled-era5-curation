@@ -33,7 +33,7 @@ The pipeline uses environment variables for configuration, with sensible default
 - `ERA5_RESOLUTION`: Spatial resolution of ERA5 input data, in kilometers (default: 4)
 
 **WRF `geo_em` File Path**
-The path to the WRF projection file (`geo_em.d02.nc`) is automatically derived from the `ERA5_INPUT_DIR` path. The **assumption:** is that the `geo_em.d02.nc` file is located exactly one directory level above the `ERA5_INPUT_DIR`. For example, if `ERA5_INPUT_DIR` is set to `/beegfs/CMIP6/wrf_era5/04km`, the pipeline will automatically look for the geo file at `/beegfs/CMIP6/wrf_era5/geo_em.d02.nc`. The processing will fail if this file is not found at the derived location.
+The path to the WRF projection file (`geo_em.d01.nc` or `geo_em.d02.nc`) is automatically derived from the `ERA5_INPUT_DIR` path. These files correspond to the 12km and 4km data, respectively. The **assumption:** is that the `geo_em.d01.nc` or `geo_em.d02.nc` file is located exactly one directory level above the `ERA5_INPUT_DIR`. For example, if `ERA5_INPUT_DIR` is set to `/beegfs/CMIP6/wrf_era5/04km`, the pipeline will automatically look for the geo file at `/beegfs/CMIP6/wrf_era5/geo_em.d02.nc`. If `ERA5_INPUT_DIR` is set to `/beegfs/CMIP6/wrf_era5/12km`, the pipeline will automatically look for the geo file at `/beegfs/CMIP6/wrf_era5/geo_em.d01.nc`. The processing will fail if this file is not found at the derived location.
 
 **Input File Naming Convention**
 The pattern for input data files is assumed to be `era5_wrf_dscale_{resolution}km_{date}.nc`, where `{resolution}` is the spatial resolution determined by the `ERA5_RESOLUTION` environment variable (e.g., `4`), and `{date}` is the date string (e.g., `1980-01-01`).
