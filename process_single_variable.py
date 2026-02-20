@@ -219,8 +219,8 @@ def get_grid_info(tmp_file, geo_file):
         geo_ds.attrs["CEN_LON"], geo_ds.attrs["CEN_LAT"]
     )
     # now compute the rest of the grid based on x/y dimension lengths and grid spacing
-    dx = ds.attrs["DX"]  # grid spacing in x direction (meters)
-    dy = ds.attrs["DY"]  # grid spacing in y direction (meters)
+    dx = geo_ds.attrs["DX"]  # grid spacing in x direction (meters)
+    dy = geo_ds.attrs["DY"]  # grid spacing in y direction (meters)
     nx = ds.XLONG.shape[1]
     ny = ds.XLONG.shape[0]
     x0 = -(nx - 1) / 2.0 * dx + e
