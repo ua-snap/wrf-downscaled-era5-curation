@@ -199,7 +199,7 @@ def get_grid_info(tmp_file, geo_file):
     geo_ds = xr.open_dataset(geo_file)
 
     # The proj4 string for the WRF projection is:
-    # +proj=stere +units=m +a=6370000.0 +b=6370000.0 +lat_0=90.0 +lon_0=-152 +lat_ts=64 +nadgrids=@null
+    # +proj=stere +units=m +a=6370000.0 +b=6370000.0 +lat_0=90.0 +lon_0=-152 +lat_ts=64
     # this was determined separately using the WRF-Python package
     # which has spotty availability / compatability
     #
@@ -207,7 +207,8 @@ def get_grid_info(tmp_file, geo_file):
     # wrf_proj = PolarStereographic(
     #     **{"TRUELAT1": geo_ds.attrs["TRUELAT1"], "STAND_LON": geo_ds.attrs["STAND_LON"]}
     # ).proj4()
-    wrf_proj = "+proj=stere +units=m +a=6370000.0 +b=6370000.0 +lat_0=90.0 +lon_0=-152 +lat_ts=64 +nadgrids=@null"
+    # the +nadgrids=@null part is not needed for the reprojection we are doing, and causes issues with pyproj, so it was removed from the proj4 string.
+    wrf_proj = "+proj=stere +units=m +a=6370000.0 +b=6370000.0 +lat_0=90.0 +lon_0=-152 +lat_ts=64"
 
     # WGS84 projection
     wgs_proj = Proj(proj="latlong", datum="WGS84")
