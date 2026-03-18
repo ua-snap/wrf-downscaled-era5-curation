@@ -70,7 +70,7 @@ The pipeline should be executed on Chinook, and can be launched from a "login" o
 
 ### `submit_era5_jobs.py`: Processing Multiple Variables and Years
 
-The job submission script is the recommended method of executing this pipeline. For example:
+The job submission script is the recommended method of executing this pipeline. Command line arguments here will override environmental variables. For example:
 
 ```bash
 # Process multiple variables for a range of years
