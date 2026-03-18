@@ -45,6 +45,7 @@ The pattern for input data files is assumed to be `era5_wrf_dscale_{resolution}k
 - `ERA5_BATCH_SIZE`: Number of files to process per batch (default: 90, range: 2-365)
 - `ERA5_DASK_CORES`: Number of cores Dask should use. If set, this overrides auto-detection. Auto-detection prioritizes `SLURM_CPUS_PER_TASK` if in a SLURM environment, otherwise `os.cpu_count()`.
 - `ERA5_DASK_TASK_TYPE`: Task type for Dask worker optimization (default: `io_bound`, set in `config.py`). Can be set to `io_bound`, `compute_bound`, or `balanced`. This environment variable overrides the default.
+- `CONVERT_TEMP_TO_C`: Whether to convert temperature variables from Kelvin to Celsius (default: `TRUE`). Set to `FALSE`, `0`, `NO`, `N`, or `OFF` to keep temperatures in Kelvin. Affects output units for variables like t2_mean, t2_min, t2_max, ctt_mean, ctt_min, and ctt_max.
 
 ### Dask Configuration Details
 

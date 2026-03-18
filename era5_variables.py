@@ -5,17 +5,34 @@ for finding variables and validating variable requests. The variables are stored
 in a flat dictionary structure for simplified access and processing.
 """
 
+import os
 from typing import Dict, List, Any, Optional, Set, Tuple
 
 from utils.custom_agg_funcs import calc_circular_mean_wind_dir
+
+
+def _should_convert_temp_to_celsius() -> bool:
+    """Check if temperature conversion to Celsius is enabled.
+    
+    Returns:
+        True if CONVERT_TEMP_TO_C is not set or is set to a truthy value.
+        False if CONVERT_TEMP_TO_C is explicitly set to a falsy value.
+    """
+    env_value = os.getenv("CONVERT_TEMP_TO_C", "TRUE").strip().upper()
+    return env_value not in ("FALSE", "0", "NO", "N", "OFF")
+
+
+# Determine conversion settings at module load time
+_CONVERT_TEMP = _should_convert_temp_to_celsius()
+_KELVIN_TO_CELSIUS_OFFSET = 273.15
 
 era5_datavar_lut: Dict[str, Dict[str, Any]] = {
     "t2_mean": {
         "var_id": "T2",
         "short_name": "t2m",
         "standard_name": "air_temperature",
-        "units": "degree_C",
-        "agg_func": lambda x: x.mean(dim="Time") - 273.15,
+        "units": "degree_C" if _CONVERT_TEMP else "K",
+        "agg_func": (lambda x: x.mean(dim="Time") - _KELVIN_TO_CELSIUS_OFFSET) if _CONVERT_TEMP else (lambda x: x.mean(dim="Time")),
         "description": "Daily mean temperature at 2 meters",
         "cell_methods": "time: mean",
     },
@@ -23,8 +40,8 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "var_id": "T2",
         "short_name": "t2m",
         "standard_name": "air_temperature",
-        "units": "degree_C",
-        "agg_func": lambda x: x.min(dim="Time") - 273.15,
+        "units": "degree_C" if _CONVERT_TEMP else "K",
+        "agg_func": (lambda x: x.min(dim="Time") - _KELVIN_TO_CELSIUS_OFFSET) if _CONVERT_TEMP else (lambda x: x.min(dim="Time")),
         "description": "Daily minimum temperature at 2 meters",
         "cell_methods": "time: minimum",
     },
@@ -32,8 +49,8 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "var_id": "T2",
         "short_name": "t2m",
         "standard_name": "air_temperature",
-        "units": "degree_C",
-        "agg_func": lambda x: x.max(dim="Time") - 273.15,
+        "units": "degree_C" if _CONVERT_TEMP else "K",
+        "agg_func": (lambda x: x.max(dim="Time") - _KELVIN_TO_CELSIUS_OFFSET) if _CONVERT_TEMP else (lambda x: x.max(dim="Time")),
         "description": "Daily maximum temperature at 2 meters",
         "cell_methods": "time: maximum",
     },
@@ -121,24 +138,24 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "var_id": "ctt",
         "short_name": "ctt",
         "standard_name": "cloud_top_temperature",
-        "units": "degree_C",
-        "agg_func": lambda x: x.mean(dim="Time") - 273.15,
+        "units": "degree_C" if _CONVERT_TEMP else "K",
+        "agg_func": (lambda x: x.mean(dim="Time") - _KELVIN_TO_CELSIUS_OFFSET) if _CONVERT_TEMP else (lambda x: x.mean(dim="Time")),
         "description": "Daily mean cloud top temperature",
     },
     "ctt_min": {
         "var_id": "ctt",
         "short_name": "ctt",
         "standard_name": "cloud_top_temperature",
-        "units": "degree_C",
-        "agg_func": lambda x: x.min(dim="Time") - 273.15,
+        "units": "degree_C" if _CONVERT_TEMP else "K",
+        "agg_func": (lambda x: x.min(dim="Time") - _KELVIN_TO_CELSIUS_OFFSET) if _CONVERT_TEMP else (lambda x: x.min(dim="Time")),
         "description": "Daily minimum cloud top temperature",
     },
     "ctt_max": {
         "var_id": "ctt",
         "short_name": "ctt",
         "standard_name": "cloud_top_temperature",
-        "units": "degree_C",
-        "agg_func": lambda x: x.max(dim="Time") - 273.15,
+        "units": "degree_C" if _CONVERT_TEMP else "K",
+        "agg_func": (lambda x: x.max(dim="Time") - _KELVIN_TO_CELSIUS_OFFSET) if _CONVERT_TEMP else (lambda x: x.max(dim="Time")),
         "description": "Daily maximum cloud top temperature",
     },
     "dbz_max": {
