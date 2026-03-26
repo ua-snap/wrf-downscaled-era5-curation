@@ -9,13 +9,16 @@ from typing import Dict, List, Any, Optional, Set, Tuple
 
 from utils.custom_agg_funcs import calc_circular_mean_wind_dir
 
+
+_KELVIN_TO_CELSIUS_OFFSET = 273.15
+
 era5_datavar_lut: Dict[str, Dict[str, Any]] = {
     "t2_mean": {
         "var_id": "T2",
         "short_name": "t2m",
         "standard_name": "air_temperature",
         "units": "degree_C",
-        "agg_func": lambda x: x.mean(dim="Time") - 273.15,
+        "agg_func": lambda x: x.mean(dim="Time") - _KELVIN_TO_CELSIUS_OFFSET,
         "description": "Daily mean temperature at 2 meters",
         "cell_methods": "time: mean",
     },
@@ -24,7 +27,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "t2m",
         "standard_name": "air_temperature",
         "units": "degree_C",
-        "agg_func": lambda x: x.min(dim="Time") - 273.15,
+        "agg_func": lambda x: x.min(dim="Time") - _KELVIN_TO_CELSIUS_OFFSET,
         "description": "Daily minimum temperature at 2 meters",
         "cell_methods": "time: minimum",
     },
@@ -33,7 +36,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "t2m",
         "standard_name": "air_temperature",
         "units": "degree_C",
-        "agg_func": lambda x: x.max(dim="Time") - 273.15,
+        "agg_func": lambda x: x.max(dim="Time") - _KELVIN_TO_CELSIUS_OFFSET,
         "description": "Daily maximum temperature at 2 meters",
         "cell_methods": "time: maximum",
     },
@@ -104,7 +107,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "var_id": "SEAICE",
         "short_name": "siconc",
         "standard_name": "sea_ice_area_fraction",
-        "units": "1", # CF standard unit for fractional area, but "1" as a unit is sorta confusing
+        "units": "1",  # CF standard unit for fractional area, but "1" as a unit is sorta confusing
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum sea ice area fraction",
         "cell_methods": "time: maximum",
@@ -122,7 +125,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "ctt",
         "standard_name": "cloud_top_temperature",
         "units": "degree_C",
-        "agg_func": lambda x: x.mean(dim="Time") - 273.15,
+        "agg_func": lambda x: x.mean(dim="Time") - _KELVIN_TO_CELSIUS_OFFSET,
         "description": "Daily mean cloud top temperature",
     },
     "ctt_min": {
@@ -130,7 +133,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "ctt",
         "standard_name": "cloud_top_temperature",
         "units": "degree_C",
-        "agg_func": lambda x: x.min(dim="Time") - 273.15,
+        "agg_func": lambda x: x.min(dim="Time") - _KELVIN_TO_CELSIUS_OFFSET,
         "description": "Daily minimum cloud top temperature",
     },
     "ctt_max": {
@@ -138,7 +141,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "ctt",
         "standard_name": "cloud_top_temperature",
         "units": "degree_C",
-        "agg_func": lambda x: x.max(dim="Time") - 273.15,
+        "agg_func": lambda x: x.max(dim="Time") - _KELVIN_TO_CELSIUS_OFFSET,
         "description": "Daily maximum cloud top temperature",
     },
     "dbz_max": {

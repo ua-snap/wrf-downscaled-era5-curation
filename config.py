@@ -12,20 +12,21 @@ from typing import List, Optional
 
 logger = logging.getLogger(__name__)
 
+
 def _parse_cores_env_var() -> Optional[int]:
     """Parse ERA5_DASK_CORES environment variable with validation.
-    
+
     Returns:
         int: Number of cores if ERA5_DASK_CORES is set and valid
         None: If ERA5_DASK_CORES is not set (triggers auto-detection)
-        
+
     Raises:
         ValueError: If ERA5_DASK_CORES is set but invalid
     """
     cores_str = getenv("ERA5_DASK_CORES")
     if cores_str is None:
         return None
-    
+
     try:
         cores = int(cores_str)
         if cores <= 0:
@@ -33,6 +34,7 @@ def _parse_cores_env_var() -> Optional[int]:
         return cores
     except ValueError as e:
         raise ValueError(f"Invalid ERA5_DASK_CORES value '{cores_str}': {e}")
+
 
 def _get_data_vars() -> List[str]:
     """Get data variables from environment or default to a subset of available variables."""
@@ -42,37 +44,58 @@ def _get_data_vars() -> List[str]:
     else:
         return ["t2_mean", "t2_min", "t2_max"]
 
+
 # Using a frozen dataclass to ensure that the config is immutable
 @dataclass(frozen=True)
 class DataLocationConfig:
     """Configuration for all data paths and patterns."""
+
     input_dir: Path
     output_dir: Path
-    file_pattern: str = "era5_wrf_dscale_4km_{date}.nc"
+    resolution: int
+    file_pattern: str = "era5_wrf_dscale_{resolution}km_{date}.nc"
     geo_file: Path = field(init=False)
 
-    # Default Chinook paths - kept as documentation and development defaults
-    DEFAULT_PATHS = {
-        "input_dir": "/beegfs/CMIP6/wrf_era5/04km",
+    # Likely Chinook paths and resolution - kept as documentation and for dev
+    EXAMPLE_PATHS = {
+        "input_dir": "/beegfs/CMIP6/wrf_era5/{resolution:02d}km",
         "output_dir": "/beegfs/CMIP6/$USER/daily_downscaled_era5_for_rasdaman",
     }
+    EXAMPLE_RESOLUTION = 4
 
     def __post_init__(self):
         """Derive geo_file path after initialization."""
         # Use object.__setattr__ because the dataclass is frozen
-        object.__setattr__(self, 'geo_file', self.input_dir.parent / 'geo_em.d02.nc')
+        # Select geo_em.d02.nc for 4km, geo_em.d01.nc for 12km
+        if self.resolution == 4:
+            geo_filename = "geo_em.d02.nc"
+        elif self.resolution == 12:
+            geo_filename = "geo_em.d01.nc"
+        else:
+            raise ValueError(f"Invalid resolution: {self.resolution}. Must be 4 or 12.")
+        object.__setattr__(self, "geo_file", self.input_dir.parent / geo_filename)
 
     # why a classmethod?
     # because we want to be able to create an instance of the class without having to pass in all the arguments
     @classmethod
-    def from_env(cls, require_env_vars: bool = True) -> 'DataLocationConfig':
+    def from_env(cls, require_env_vars: bool = True) -> "DataLocationConfig":
         """Create configuration from environment variables.
-        
+
         Args:
             require_env_vars: If True, raise error when env vars missing.
-                            If False, use default Chinook paths.
+                            If False, use example Chinook paths.
         """
-        # Get paths from environment
+        # Get resolution from environment or default
+        resolution_env = getenv("ERA5_RESOLUTION")
+        resolution = (
+            int(resolution_env)
+            if resolution_env is not None
+            else cls.EXAMPLE_RESOLUTION
+        )
+        if resolution not in (4, 12):
+            raise ValueError(f"Invalid ERA5_RESOLUTION: {resolution}. Must be 4 or 12.")
+
+        # Get paths from environment or default, formatting with resolution
         input_dir = getenv("ERA5_INPUT_DIR")
         output_dir = getenv("ERA5_OUTPUT_DIR")
 
@@ -82,28 +105,33 @@ class DataLocationConfig:
                 missing.append("ERA5_INPUT_DIR")
             if not output_dir:
                 missing.append("ERA5_OUTPUT_DIR")
-            
+            if resolution_env is None:
+                missing.append("ERA5_RESOLUTION")
             if missing:
                 raise ValueError(
                     "Missing required environment variables:\n"
                     f"{', '.join(missing)}\n\n"
                     "These must be set before running the pipeline.\n"
-                    f"Default paths on Chinook would be:\n"
-                    f"ERA5_INPUT_DIR={cls.DEFAULT_PATHS['input_dir']}\n"
-                    f"ERA5_OUTPUT_DIR={cls.DEFAULT_PATHS['output_dir']}"
+                    f"Example paths on Chinook would be:\n"
+                    f"ERA5_INPUT_DIR={cls.EXAMPLE_PATHS['input_dir'].format(resolution=cls.EXAMPLE_RESOLUTION)}\n"
+                    f"ERA5_OUTPUT_DIR={cls.EXAMPLE_PATHS['output_dir']}\n"
+                    f"ERA5_RESOLUTION={cls.EXAMPLE_RESOLUTION}"
                 )
         else:
             logger.warning(
-                "Using default Chinook paths - this is not recommended for production!\n"
-                "Set ERA5_INPUT_DIR and ERA5_OUTPUT_DIR environment "
+                "Using example Chinook paths, not recommended for production!\n"
+                "Set ERA5_INPUT_DIR, ERA5_OUTPUT_DIR, and ERA5_RESOLUTION environment "
                 "variables to override defaults."
             )
-            input_dir = input_dir or cls.DEFAULT_PATHS["input_dir"]
-            output_dir = output_dir or cls.DEFAULT_PATHS["output_dir"]
+            input_dir = input_dir or cls.EXAMPLE_PATHS["input_dir"].format(
+                resolution=resolution
+            )
+            output_dir = output_dir or cls.EXAMPLE_PATHS["output_dir"]
 
         return cls(
             input_dir=Path(input_dir),
             output_dir=Path(output_dir),
+            resolution=resolution,
         )
 
     def validate(self) -> None:
@@ -119,29 +147,35 @@ class DataLocationConfig:
         return self.input_dir / str(year)
 
     def get_output_file(self, variable: str, year: int) -> Path:
-        """Get output file path for a variable and year."""
-        return self.output_dir / variable / f"{variable}_{year}_daily_era5_4km_3338.nc"
+        """Get output file path for a variable and year using the configured resolution."""
+        return (
+            self.output_dir
+            / variable
+            / f"{variable}_{year}_daily_era5_{self.resolution}km_3338.nc"
+        )
 
     def get_variable_dir(self, variable: str) -> Path:
         """Get output directory for a specific variable."""
         return self.output_dir / variable
 
     def validate_output_file(self, variable: str, year: int) -> bool:
-        """Check if output file exists and is valid."""
+        """Check if output file exists and is valid for the configured resolution."""
         file = self.get_output_file(variable, year)
         return file.exists() and file.stat().st_size > 0
+
 
 @dataclass(frozen=True)
 class DaskConfig:
     """Configuration for Dask compute settings.
-    
+
     This class handles Dask-specific configuration through environment variables:
         ERA5_DASK_CORES: Number of cores to use (default: auto-detect)
         ERA5_DASK_TASK_TYPE: Task type (default: io_bound)
-        
+
     Memory is automatically detected from SLURM allocation (90% of SLURM_MEM_PER_NODE)
     or defaults to 64GB for non-SLURM environments.
     """
+
     # ERA5_DASK_CORES environment variable takes precedence over auto-detection.
     # Configuration pathway:
     # 1. If ERA5_DASK_CORES is set: use that value (after validation)
@@ -149,9 +183,7 @@ class DaskConfig:
     # 3. dask_utils.get_dask_client() handles auto-detection:
     #    - First tries SLURM_CPUS_PER_TASK if in SLURM environment
     #    - Falls back to os.cpu_count() if no SLURM allocation
-    cores: Optional[int] = field(
-        default_factory=lambda: _parse_cores_env_var()
-    )
+    cores: Optional[int] = field(default_factory=lambda: _parse_cores_env_var())
     task_type: str = field(
         default_factory=lambda: getenv("ERA5_DASK_TASK_TYPE", "io_bound")
     )
@@ -159,11 +191,11 @@ class DaskConfig:
     def __post_init__(self) -> None:
         """Validate configuration after initialization."""
         from utils.dask_utils import VALID_TASK_TYPES
-        
+
         # Validate cores
         if self.cores is not None and self.cores <= 0:
             raise ValueError(f"Cores must be positive, got: {self.cores}")
-        
+
         # Validate task type
         if self.task_type not in VALID_TASK_TYPES:
             raise ValueError(
@@ -171,56 +203,61 @@ class DaskConfig:
                 f"Must be one of: {VALID_TASK_TYPES}"
             )
 
+
 def _validate_batch_size(batch_size: int) -> None:
     """Validate batch size with performance guidance.
-    
+
     Valid range: 2-365 files (minimum 2 files, maximum 1 year of daily files)
-    
+
     Batch size controls how many files are processed together in memory.
     Performance profiling shows that medium batch sizes (90-180) perform best,
-    with 90 files being optimal for most ERA5 workloads. Larger batch sizes 
-    (300-365) can create overhead, while smaller batch sizes may be needed 
+    with 90 files being optimal for most ERA5 workloads. Larger batch sizes
+    (300-365) can create overhead, while smaller batch sizes may be needed
     for future 3D variables with additional dimensions.
-    
+
     Args:
         batch_size: Number of files to process in each batch
-        
+
     Raises:
         ValueError: If batch size is outside valid range (2-365)
     """
     if not isinstance(batch_size, int):
-        raise ValueError(f"Batch size must be an integer, got: {type(batch_size).__name__}")
-    
+        raise ValueError(
+            f"Batch size must be an integer, got: {type(batch_size).__name__}"
+        )
+
     if batch_size < 2:
         raise ValueError(
             f"Batch size must be at least 2 files, got: {batch_size}. "
             "Minimum batch size ensures efficient processing."
         )
-    
+
     if batch_size > 365:
         raise ValueError(
             f"Batch size cannot exceed 365 files (1 year of daily data), got: {batch_size}. "
             "Large batch sizes can cause memory issues and Dask hangs."
         )
 
+
 @dataclass
 class Config:
     """Configuration settings for the processing pipeline.
-    
+
     This class handles pipeline-wide configuration through environment variables:
         ERA5_START_YEAR: Start year for processing (default: 1960)
         ERA5_END_YEAR: End year for processing (default: 2020)
         ERA5_DATA_VARS: Comma-separated list of variables (default: t2_mean,t2_min,t2_max)
         ERA5_BATCH_SIZE: Number of files to process per batch (default: 90)
     """
+
     # Time range settings
     START_YEAR: int = int(getenv("ERA5_START_YEAR", "1960"))
     END_YEAR: int = int(getenv("ERA5_END_YEAR", "2020"))
     DATA_VARS: List[str] = field(default_factory=lambda: _get_data_vars())
-    
+
     # Processing settings
     BATCH_SIZE: int = int(getenv("ERA5_BATCH_SIZE", "90"))
-    
+
     # Dask configuration
     dask: DaskConfig = field(default_factory=lambda: DaskConfig())
 
@@ -231,11 +268,11 @@ class Config:
 
     def _validate_years(self) -> None:
         """Validate year range configuration."""
-        current_year = datetime.now().year
-        if not 1950 <= self.START_YEAR <= current_year:
-            raise ValueError(f"START_YEAR must be between 1950 and {current_year}")
-        if not self.START_YEAR <= self.END_YEAR <= current_year:
-            raise ValueError(f"END_YEAR must be between START_YEAR and {current_year}")
+        if not 1950 <= self.START_YEAR <= 2023:
+            raise ValueError("START_YEAR must be between 1950 and 2023")
+        if not self.START_YEAR <= self.END_YEAR <= 2023:
+            raise ValueError("END_YEAR must be between START_YEAR and 2023")
+
 
 # Create global instances
 # In production, always require environment variables
@@ -244,4 +281,3 @@ config = Config()
 
 # Export both config instances as the primary interface
 __all__ = ["config", "data_config"]
-

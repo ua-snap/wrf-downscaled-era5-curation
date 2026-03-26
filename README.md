@@ -1,6 +1,6 @@
 # ERA5 Processing Pipeline
 
-This pipeline is for processing ERA5 4 km WRF-downscaled data. The pipeline is intended to resample the input data source from hourly to daily resolution, and put it on the EPSG:3338 grid. This approach uses Dask for parallel processing within individual compute nodes, but processes one variable and one year at a time using SLURM for job management.
+This pipeline is for processing ERA5 WRF-downscaled data. The pipeline is intended to resample the input data source from hourly to daily resolution, and put it on the EPSG:3338 grid. This approach uses Dask for parallel processing within individual compute nodes, but processes one variable and one year at a time using SLURM for job management. The pipeline is designed to be orchestrated with a Prefect flow that is tracked in another [repo](https://github.com/ua-snap/prefect/tree/main/era5_4km). Use that flow for production data runs, although development can occur within this repo using normal Python and SLURM execution pathways.
 
 ## Project Structure
 
@@ -17,7 +17,7 @@ This pipeline is for processing ERA5 4 km WRF-downscaled data. The pipeline is i
 There are several modules in the `utils` directory:
 - **dask_utils.py**: Manages Dask client configuration and distributed computing setup
 - **logging.py**: Provides standardized logging configuration
-- **custom_agg_funcs.py**: Bespoke functions for aggregating data where a simple lambda is awkward.
+- **custom_agg_funcs.py**: Bespoke functions for aggregating data where a simple lambda is awkward
 
 ### Quality Control
 
@@ -28,47 +28,74 @@ The `qc` directory: quality control plotting functions and notebooks.
 The pipeline uses environment variables for configuration, with sensible defaults for the Chinook environment. You can set these variables to override the defaults:
 
 ### Required Environment Variables
-- `ERA5_INPUT_DIR`: Input directory containing ERA5 data (default: "/beegfs/CMIP6/wrf_era5/04km")
-- `ERA5_OUTPUT_DIR`: Output directory for processed files (default: "/beegfs/CMIP6/cparr4/daily_downscaled_era5_for_rasdaman")
+- `ERA5_INPUT_DIR`: Input directory containing ERA5 data (e.g., `/beegfs/CMIP6/wrf_era5/04km`) for the 4 km resolution dataset
+- `ERA5_OUTPUT_DIR`: Output directory for processed files (e.g., `/beegfs/CMIP6/$USER/daily_downscaled_era5`)
+- `ERA5_RESOLUTION`: Spatial resolution of ERA5 input data, in kilometers. Must be `4` or `12`. No default — this must be set explicitly.
+
+Failure to set these variables will produce the following error message:
+
+```
+ValueError: Missing required environment variables:
+ERA5_INPUT_DIR, ERA5_OUTPUT_DIR, ERA5_RESOLUTION
+
+These must be set before running the pipeline.
+Default paths on Chinook would be:
+ERA5_INPUT_DIR=/beegfs/CMIP6/wrf_era5/04km
+ERA5_OUTPUT_DIR=/beegfs/CMIP6/$USER/daily_downscaled_era5_for_rasdaman
+ERA5_RESOLUTION=4
+```
 
 **WRF `geo_em` File Path**
-The path to the WRF projection file (`geo_em.d02.nc`) is automatically derived from the `ERA5_INPUT_DIR` path. The **assumption:** is that the `geo_em.d02.nc` file is located exactly one directory level above the `ERA5_INPUT_DIR`. For example, if `ERA5_INPUT_DIR` is set to `/beegfs/CMIP6/wrf_era5/04km`, the pipeline will automatically look for the geo file at `/beegfs/CMIP6/wrf_era5/geo_em.d02.nc`. The processing will fail if this file is not found at the derived location.
+The path to the WRF projection file (`geo_em.d01.nc` or `geo_em.d02.nc`) is automatically derived from the `ERA5_INPUT_DIR` path. These files correspond to the 12km and 4km data, respectively. The **assumption:** is that the `geo_em.d01.nc` or `geo_em.d02.nc` file is located exactly one directory level above the `ERA5_INPUT_DIR`. For example, if `ERA5_INPUT_DIR` is set to `/beegfs/CMIP6/wrf_era5/04km`, the pipeline will automatically look for the geo file at `/beegfs/CMIP6/wrf_era5/geo_em.d02.nc`. If `ERA5_INPUT_DIR` is set to `/beegfs/CMIP6/wrf_era5/12km`, the pipeline will automatically look for the geo file at `/beegfs/CMIP6/wrf_era5/geo_em.d01.nc`. The processing will fail if this file is not found at the derived location.
 
 **Input File Naming Convention**
-The pattern for input data files is assumed to be `era5_wrf_dscale_4km_{date}.nc`, where `{date}` is the date string (e.g., `1980-01-01`).
+The pattern for input data files is assumed to be `era5_wrf_dscale_{resolution}km_{date}.nc`, where `{resolution}` is the spatial resolution determined by the `ERA5_RESOLUTION` environment variable (e.g., `4`), and `{date}` is the date string (e.g., `1980-01-01`).
 
-### Optional Environment Variables
+### Optional Environment Variables to Control Data Production
 - `ERA5_START_YEAR`: Start year for processing (default: 1960)
 - `ERA5_END_YEAR`: End year for processing (default: 2020)
 - `ERA5_DATA_VARS`: Comma-separated list of variables to process (default: t2_mean,t2_min,t2_max)
+- 
+### Optional Environment Variables: Performance and Stability
 - `ERA5_BATCH_SIZE`: Number of files to process per batch (default: 90, range: 2-365)
 - `ERA5_DASK_CORES`: Number of cores Dask should use. If set, this overrides auto-detection. Auto-detection prioritizes `SLURM_CPUS_PER_TASK` if in a SLURM environment, otherwise `os.cpu_count()`.
 - `ERA5_DASK_TASK_TYPE`: Task type for Dask worker optimization (default: `io_bound`, set in `config.py`). Can be set to `io_bound`, `compute_bound`, or `balanced`. This environment variable overrides the default.
 
+These performance-related details might be deprecated in the future as the pipeline and file system substrate stabilize.
+
 ### Dask Configuration Details
 
-**Cores:**
+#### Cores
 The number of cores Dask utilizes is determined in the following order of precedence:
 1.  The `ERA5_DASK_CORES` environment variable, if set.
 2.  The `SLURM_CPUS_PER_TASK` environment variable, if the job is running within a SLURM environment.
 3.  The total number of CPU cores available on the node, as reported by `os.cpu_count()`.
 
-**Memory:**
+#### Memory
 The total memory available to the Dask `LocalCluster` is determined in two steps:
 1.  **Total Available Memory**: The pipeline first determines the total memory available to the job. This is either the full amount allocated by SLURM (via the `SLURM_MEM_PER_NODE` environment variable) or a fallback of "64GB" if running outside a SLURM environment.
 2.  **Dask Worker Pool Allocation**: The Dask worker pool is **always** configured to use **90%** of this total available memory. The remaining 10% is reserved as a safety buffer for the operating system and other overhead.
 
-This 90% fraction is a fixed heuristic and does not change based on the `task_type`. It is **critical** to ensure that the memory requested from SLURM (via `#SBATCH --mem`) is sufficient. For a robust setup, it is recommended to request at least 96GB.
+This 90% fraction is a fixed heuristic and does not change based on the `task_type`. It is **critical** to ensure that the memory requested from SLURM (via `#SBATCH --mem`) is sufficient. For a robust setup, it is recommended to request at least 96GB: total memory is determined by the SLURM allocation (`#SBATCH --mem`) or an internal 64GB default if not in a SLURM environment.
 
-The `ERA5_DASK_TASK_TYPE` (defaulting to `io_bound`) influences how Dask allocates workers and threads based on the available cores, but it does not affect memory allocation.
+For example, the `process_era5_variable.sbatch` script requests 96GB from SLURM. Dask will see this 96GB as the total available memory and allocate its worker pool with 90% of it, which is approximately 86GB. This leaves a robust ~10GB buffer for system overhead.
+
+#### Task Type Configuration
+
+The `ERA5_DASK_TASK_TYPE` (defaulting to `io_bound`) influences how Dask allocates workers and threads based on the available cores, but it does not affect memory allocation. It only affects the number of workers and the number of threads per worker.
+
+- **io_bound** (default): Optimized for I/O operations, more workers with fewer threads per worker
+- **balanced**: Balanced approach for mixed workloads
+- **compute_bound**: Optimized for CPU-intensive tasks, fewer workers with more threads
 
 ## Execution
+As noted in the introduction, production data runs should be orchestrated via Prefect.
 
-The pipeline should be executed on Chinook, and can be launched from a "login" or "debug" node.
+For development, the pipeline should be executed on Chinook, and can be launched from a "login" or "debug" node.
 
 ### `submit_era5_jobs.py`: Processing Multiple Variables and Years
 
-The job submission script is the recommended method of executing this pipeline. For example:
+The job submission script is the recommended method of executing this pipeline. Command line arguments here will override environmental variables. For example:
 
 ```bash
 # Process multiple variables for a range of years
@@ -143,6 +170,7 @@ tail -f logs/era5_process/$variable_id/*.out
 Logs will get wiped at the start of each run, so if you want past logs to persist, move them elsewhere.
 
 ## Automatic Retry System
+This feature might be deprecated in the future as the pipeline and file system substrate stabilize.
 
 The pipeline includes an automatic retry system, handled directly within the `submit_era5_jobs.py` script. This system detects and resubmits failed jobs without manual intervention, which is particularly useful for handling occasional SLURM timeouts or transient failures. This is based on scanning the logs after all jobs are completed, so this is why logs get wiped after each run. Also, if you have other jobs running under your user (like a QC notebook on a compute node), this may not function because it is waiting for all jobs to complete.
 
@@ -172,10 +200,10 @@ The processed data will be saved in the specified output directory with the foll
 ```
 <output_dir>/
   <variable1>/
-    <variable1>_<year>_daily_era5_4km_3338.nc
+    <variable1>_<year>_daily_era5_<resolution>km_3338.nc
     ...
   <variable2>/
-    <variable2>_<year>_daily_era5_4km_3338.nc
+    <variable2>_<year>_daily_era5_<resolution>km_3338.nc
     ...
   ...
 ```
@@ -183,7 +211,7 @@ The processed data will be saved in the specified output directory with the foll
 Each NetCDF file contains the processed data for one variable and one year, with the following characteristics:
 
 - Daily frequency (aggregated from hourly data)
-- 4 km spatial resolution
+- Either 4 or 12 km spatial resolution
 - EPSG:3338 Alaska Albers projection
 - Some compression applied for reduced file size
 - CF compliant where possible
@@ -203,6 +231,7 @@ Each NetCDF file contains the processed data for one variable and one year, with
 |------------------------|---------------|---------|-------------|
 | `ERA5_INPUT_DIR` | `/beegfs/CMIP6/wrf_era5/04km` | Hardcoded | Input directory containing ERA5 data |
 | `ERA5_OUTPUT_DIR` | `/beegfs/CMIP6/$USER/daily_downscaled_era5_for_rasdaman` | Hardcoded | Output directory for processed files |
+| `ERA5_RESOLUTION` | — | Required | Spatial resolution in km. Must be `4` or `12`. |
 | `ERA5_START_YEAR` | `1960` | Hardcoded | Start year for processing |
 | `ERA5_END_YEAR` | `2020` | Hardcoded | End year for processing |
 | `ERA5_DATA_VARS` | `t2_mean,t2_min,t2_max` | Hardcoded | Default variables to process |
@@ -210,23 +239,4 @@ Each NetCDF file contains the processed data for one variable and one year, with
 | `ERA5_DASK_CORES` | Auto-detect | Code/Auto-detect (via SLURM or `os.cpu_count()`); Env var overrides. | Number of cores for Dask workers |
 | `ERA5_DASK_TASK_TYPE` | `io_bound` | Code (defaults to `io_bound` in `config.py`); Env var overrides. | Task type for Dask optimization |
 
-The default configuration values are based on some basic profiling. 
-
-### Dask Memory Configuration
-
-Dask's total memory for its worker pool is configured to use a fixed fraction (**90%**) of the total memory available to the job. The total memory is determined by the SLURM allocation (`#SBATCH --mem`) or an internal 64GB default if not in a SLURM environment.
-
-For example, the `process_era5_variable.sbatch` script now requests 96GB from SLURM. Dask will see this 96GB as the total available memory and allocate its worker pool with 90% of it, which is approximately 86GB. This leaves a robust ~10GB buffer for system overhead. This approach is simpler and more stable than previous configurations.
-
-### Dask Task Type Configuration
-
-The `ERA5_DASK_TASK_TYPE` parameter controls how Dask constructs the cluster. It only affects the number of workers and the number of threads per worker; it does not change the memory allocation strategy.
-
-- **io_bound** (default): Optimized for I/O operations, more workers with fewer threads per worker
-- **balanced**: Balanced approach for mixed workloads
-- **compute_bound**: Optimized for CPU-intensive tasks, fewer workers with more threads
-
-### Batch Size Configuration
-
-The `ERA5_BATCH_SIZE` parameter controls how many files are processed together in memory:
-- **Valid Range**: 2-365 files
+The default configuration values are based on some basic profiling and empirical testing. 

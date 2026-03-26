@@ -88,7 +88,9 @@ def get_year_filepaths(year: int) -> List[Path]:
     # Use glob to find all files matching the pattern
     # Format the date part of the pattern with the year and a wildcard for month/day
     date_pattern = f"{year}-*"
-    file_pattern = data_config.file_pattern.format(date=date_pattern)
+    file_pattern = data_config.file_pattern.format(
+        date=date_pattern, resolution=data_config.resolution
+    )
 
     fps = sorted(year_dir.glob(file_pattern))
 
@@ -199,7 +201,7 @@ def get_grid_info(tmp_file, geo_file):
     geo_ds = xr.open_dataset(geo_file)
 
     # The proj4 string for the WRF projection is:
-    # +proj=stere +units=m +a=6370000.0 +b=6370000.0 +lat_0=90.0 +lon_0=-152 +lat_ts=64 +nadgrids=@null
+    # +proj=stere +units=m +a=6370000.0 +b=6370000.0 +lat_0=90.0 +lon_0=-152 +lat_ts=64
     # this was determined separately using the WRF-Python package
     # which has spotty availability / compatability
     #
@@ -207,7 +209,8 @@ def get_grid_info(tmp_file, geo_file):
     # wrf_proj = PolarStereographic(
     #     **{"TRUELAT1": geo_ds.attrs["TRUELAT1"], "STAND_LON": geo_ds.attrs["STAND_LON"]}
     # ).proj4()
-    wrf_proj = "+proj=stere +units=m +a=6370000.0 +b=6370000.0 +lat_0=90.0 +lon_0=-152 +lat_ts=64 +nadgrids=@null"
+    # the +nadgrids=@null part causes issues with pyproj, so it was removed from the proj4 string.
+    wrf_proj = "+proj=stere +units=m +a=6370000.0 +b=6370000.0 +lat_0=90.0 +lon_0=-152 +lat_ts=64"
 
     # WGS84 projection
     wgs_proj = Proj(proj="latlong", datum="WGS84")
@@ -218,7 +221,8 @@ def get_grid_info(tmp_file, geo_file):
         geo_ds.attrs["CEN_LON"], geo_ds.attrs["CEN_LAT"]
     )
     # now compute the rest of the grid based on x/y dimension lengths and grid spacing
-    dx = dy = 4000
+    dx = geo_ds.attrs["DX"]  # grid spacing in x direction (meters)
+    dy = geo_ds.attrs["DY"]  # grid spacing in y direction (meters)
     nx = ds.XLONG.shape[1]
     ny = ds.XLONG.shape[0]
     x0 = -(nx - 1) / 2.0 * dx + e
@@ -274,7 +278,6 @@ def read_data(
 
     logger.info(f"Opening files with chunks: {chunks}")
 
-    
     ds = xr.open_mfdataset(
         filepaths,
         drop_variables=drop_vars,
