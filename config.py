@@ -56,12 +56,12 @@ class DataLocationConfig:
     file_pattern: str = "era5_wrf_dscale_{resolution}km_{date}.nc"
     geo_file: Path = field(init=False)
 
-    # Default Chinook paths and resolution - kept as documentation and development defaults
-    DEFAULT_PATHS = {
+    # Likely Chinook paths and resolution - kept as documentation and for dev
+    EXAMPLE_PATHS = {
         "input_dir": "/beegfs/CMIP6/wrf_era5/{resolution:02d}km",
         "output_dir": "/beegfs/CMIP6/$USER/daily_downscaled_era5_for_rasdaman",
     }
-    DEFAULT_RESOLUTION = 4
+    EXAMPLE_RESOLUTION = 4
 
     def __post_init__(self):
         """Derive geo_file path after initialization."""
@@ -83,14 +83,14 @@ class DataLocationConfig:
 
         Args:
             require_env_vars: If True, raise error when env vars missing.
-                            If False, use default Chinook paths.
+                            If False, use example Chinook paths.
         """
         # Get resolution from environment or default
         resolution_env = getenv("ERA5_RESOLUTION")
         resolution = (
             int(resolution_env)
             if resolution_env is not None
-            else cls.DEFAULT_RESOLUTION
+            else cls.EXAMPLE_RESOLUTION
         )
         if resolution not in (4, 12):
             raise ValueError(f"Invalid ERA5_RESOLUTION: {resolution}. Must be 4 or 12.")
@@ -112,21 +112,21 @@ class DataLocationConfig:
                     "Missing required environment variables:\n"
                     f"{', '.join(missing)}\n\n"
                     "These must be set before running the pipeline.\n"
-                    f"Default paths on Chinook would be:\n"
-                    f"ERA5_INPUT_DIR={cls.DEFAULT_PATHS['input_dir'].format(resolution=cls.DEFAULT_RESOLUTION)}\n"
-                    f"ERA5_OUTPUT_DIR={cls.DEFAULT_PATHS['output_dir']}\n"
-                    f"ERA5_RESOLUTION={cls.DEFAULT_RESOLUTION}"
+                    f"Example paths on Chinook would be:\n"
+                    f"ERA5_INPUT_DIR={cls.EXAMPLE_PATHS['input_dir'].format(resolution=cls.EXAMPLE_RESOLUTION)}\n"
+                    f"ERA5_OUTPUT_DIR={cls.EXAMPLE_PATHS['output_dir']}\n"
+                    f"ERA5_RESOLUTION={cls.EXAMPLE_RESOLUTION}"
                 )
         else:
             logger.warning(
-                "Using default Chinook paths - this is not recommended for production!\n"
+                "Using example Chinook paths, not recommended for production!\n"
                 "Set ERA5_INPUT_DIR, ERA5_OUTPUT_DIR, and ERA5_RESOLUTION environment "
                 "variables to override defaults."
             )
-            input_dir = input_dir or cls.DEFAULT_PATHS["input_dir"].format(
+            input_dir = input_dir or cls.EXAMPLE_PATHS["input_dir"].format(
                 resolution=resolution
             )
-            output_dir = output_dir or cls.DEFAULT_PATHS["output_dir"]
+            output_dir = output_dir or cls.EXAMPLE_PATHS["output_dir"]
 
         return cls(
             input_dir=Path(input_dir),
@@ -268,11 +268,10 @@ class Config:
 
     def _validate_years(self) -> None:
         """Validate year range configuration."""
-        current_year = datetime.now().year
-        if not 1950 <= self.START_YEAR <= current_year:
-            raise ValueError(f"START_YEAR must be between 1950 and {current_year}")
-        if not self.START_YEAR <= self.END_YEAR <= current_year:
-            raise ValueError(f"END_YEAR must be between START_YEAR and {current_year}")
+        if not 1950 <= self.START_YEAR <= 2023:
+            raise ValueError("START_YEAR must be between 1950 and 2023")
+        if not self.START_YEAR <= self.END_YEAR <= 2023:
+            raise ValueError("END_YEAR must be between START_YEAR and 2023")
 
 
 # Create global instances
