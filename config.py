@@ -68,7 +68,7 @@ class DataLocationConfig:
         elif self.resolution == 12:
             geo_filename = 'geo_em.d01.nc'
         else:
-            geo_filename = 'geo_em.d02.nc'  # Default/fallback
+            raise ValueError(f"Invalid resolution: {self.resolution}. Must be 4 or 12.")
         object.__setattr__(self, 'geo_file', self.input_dir.parent / geo_filename)
 
     # why a classmethod?
@@ -84,6 +84,8 @@ class DataLocationConfig:
         # Get resolution from environment or default
         resolution_env = getenv("ERA5_RESOLUTION")
         resolution = int(resolution_env) if resolution_env is not None else cls.DEFAULT_RESOLUTION
+        if resolution not in (4, 12):
+            raise ValueError(f"Invalid ERA5_RESOLUTION: {resolution}. Must be 4 or 12.")
 
         # Get paths from environment or default, formatting with resolution
         input_dir = getenv("ERA5_INPUT_DIR")

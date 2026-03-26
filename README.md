@@ -30,7 +30,7 @@ The pipeline uses environment variables for configuration, with sensible default
 ### Required Environment Variables
 - `ERA5_INPUT_DIR`: Input directory containing ERA5 data (default: "/beegfs/CMIP6/wrf_era5/04km")
 - `ERA5_OUTPUT_DIR`: Output directory for processed files (default: "/beegfs/CMIP6/cparr4/daily_downscaled_era5_for_rasdaman")
-- `ERA5_RESOLUTION`: Spatial resolution of ERA5 input data, in kilometers (default: 4)
+- `ERA5_RESOLUTION`: Spatial resolution of ERA5 input data, in kilometers. Must be `4` or `12`. No default — this must be set explicitly.
 
 **WRF `geo_em` File Path**
 The path to the WRF projection file (`geo_em.d01.nc` or `geo_em.d02.nc`) is automatically derived from the `ERA5_INPUT_DIR` path. These files correspond to the 12km and 4km data, respectively. The **assumption:** is that the `geo_em.d01.nc` or `geo_em.d02.nc` file is located exactly one directory level above the `ERA5_INPUT_DIR`. For example, if `ERA5_INPUT_DIR` is set to `/beegfs/CMIP6/wrf_era5/04km`, the pipeline will automatically look for the geo file at `/beegfs/CMIP6/wrf_era5/geo_em.d02.nc`. If `ERA5_INPUT_DIR` is set to `/beegfs/CMIP6/wrf_era5/12km`, the pipeline will automatically look for the geo file at `/beegfs/CMIP6/wrf_era5/geo_em.d01.nc`. The processing will fail if this file is not found at the derived location.
@@ -45,7 +45,6 @@ The pattern for input data files is assumed to be `era5_wrf_dscale_{resolution}k
 - `ERA5_BATCH_SIZE`: Number of files to process per batch (default: 90, range: 2-365)
 - `ERA5_DASK_CORES`: Number of cores Dask should use. If set, this overrides auto-detection. Auto-detection prioritizes `SLURM_CPUS_PER_TASK` if in a SLURM environment, otherwise `os.cpu_count()`.
 - `ERA5_DASK_TASK_TYPE`: Task type for Dask worker optimization (default: `io_bound`, set in `config.py`). Can be set to `io_bound`, `compute_bound`, or `balanced`. This environment variable overrides the default.
-- `CONVERT_TEMP_TO_C`: Whether to convert temperature variables from Kelvin to Celsius (default: `TRUE`). Set to `FALSE`, `0`, `NO`, `N`, or `OFF` to keep temperatures in Kelvin. Affects output units for variables like t2_mean, t2_min, t2_max, ctt_mean, ctt_min, and ctt_max.
 
 ### Dask Configuration Details
 
@@ -205,7 +204,7 @@ Each NetCDF file contains the processed data for one variable and one year, with
 |------------------------|---------------|---------|-------------|
 | `ERA5_INPUT_DIR` | `/beegfs/CMIP6/wrf_era5/04km` | Hardcoded | Input directory containing ERA5 data |
 | `ERA5_OUTPUT_DIR` | `/beegfs/CMIP6/$USER/daily_downscaled_era5_for_rasdaman` | Hardcoded | Output directory for processed files |
-| `ERA5_RESOLUTION` | 4 | Hardcoded | Resolution mathcing default input directory |
+| `ERA5_RESOLUTION` | — | Required | Spatial resolution in km. Must be `4` or `12`. |
 | `ERA5_START_YEAR` | `1960` | Hardcoded | Start year for processing |
 | `ERA5_END_YEAR` | `2020` | Hardcoded | End year for processing |
 | `ERA5_DATA_VARS` | `t2_mean,t2_min,t2_max` | Hardcoded | Default variables to process |
