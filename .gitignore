@@ -4,6 +4,8 @@ deprecated_code_backup/
 cursor*
 logs/
 Jupyter.*
+.vscode/
+.vscode
 
 
 # Byte-compiled / optimized / DLL files
