@@ -88,7 +88,9 @@ def get_year_filepaths(year: int) -> List[Path]:
     # Use glob to find all files matching the pattern
     # Format the date part of the pattern with the year and a wildcard for month/day
     date_pattern = f"{year}-*"
-    file_pattern = data_config.file_pattern.format(date=date_pattern, resolution=data_config.resolution)
+    file_pattern = data_config.file_pattern.format(
+        date=date_pattern, resolution=data_config.resolution
+    )
 
     fps = sorted(year_dir.glob(file_pattern))
 
@@ -276,7 +278,6 @@ def read_data(
 
     logger.info(f"Opening files with chunks: {chunks}")
 
-    
     ds = xr.open_mfdataset(
         filepaths,
         drop_variables=drop_vars,

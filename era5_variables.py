@@ -107,7 +107,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "var_id": "SEAICE",
         "short_name": "siconc",
         "standard_name": "sea_ice_area_fraction",
-        "units": "1", # CF standard unit for fractional area, but "1" as a unit is sorta confusing
+        "units": "1",  # CF standard unit for fractional area, but "1" as a unit is sorta confusing
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum sea ice area fraction",
         "cell_methods": "time: maximum",
