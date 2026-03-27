@@ -431,7 +431,7 @@ def write_output(ds: xr.Dataset, variable: str, output_file: Path) -> None:
     current_time = time.strftime("%Y-%m-%d %H:%M:%S UTC")
     ds.attrs["Conventions"] = "CF-1.8"
     ds.attrs["title"] = (
-        f"Daily aggregated {variable} from WRF-downscaled ERA5, 4km Alaska Albers"
+        f"Daily aggregated {variable} from WRF-downscaled ERA5, {data_config.resolution}km Alaska Albers"
     )
     ds.attrs["institution"] = (
         "Alaska Climate Adaptation Science Center, University of Alaska Fairbanks"
@@ -439,7 +439,7 @@ def write_output(ds: xr.Dataset, variable: str, output_file: Path) -> None:
     ds.attrs["source"] = "Hourly WRF-downscaled ERA5"
     ds.attrs["history"] = f"{current_time}: Created using {Path(__file__).name}"
     ds.attrs["comment"] = (
-        f"Data processed for variable '{variable}' to daily resolution and reprojected to EPSG:3338."
+        f"Data processed for variable '{variable}' from hourly to daily frequency and reprojected to EPSG:3338."
     )
     ds.attrs["references"] = "Placeholder"  # Example reference, update upon publication
 
