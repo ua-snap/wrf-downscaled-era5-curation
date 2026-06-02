@@ -325,8 +325,8 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "short_name": "swe",
         "standard_name": "surface_snow_amount",
         "units": "kg m-2",
-        "agg_func": lambda x: x.sum(dim="Time"),
-        "description": "Daily accumulated snow water equivalent",
+        "agg_func": lambda x: x.mean(dim="Time"),
+        "description": "Daily mean snow water equivalent",
     },
     "snowh_mean": {
         "var_id": "SNOWH",
