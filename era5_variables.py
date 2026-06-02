@@ -320,7 +320,7 @@ era5_datavar_lut: Dict[str, Dict[str, Any]] = {
         "agg_func": lambda x: x.max(dim="Time"),
         "description": "Daily maximum vertical wind component",
     },
-    "snow_sum": {
+    "snow_mean": {
         "var_id": "SNOW",
         "short_name": "swe",
         "standard_name": "surface_snow_amount",
